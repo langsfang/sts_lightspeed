@@ -8,11 +8,14 @@
 #include "game/GameContext.h"
 #include "sim/search/Action.h"
 #include "sim/search/GameAction.h"
+#include "sim/search/BattleScumSearcher2.h"
 
 #include <memory>
 #include <random>
 
 namespace sts::search {
+
+    enum class SearchIntent : int;
 
     class BattleScumSearcher2;
 
@@ -31,6 +34,8 @@ namespace sts::search {
         double bossSimulationMultiplier = 3;
         int stepsNoSolution = 5;
         int stepsWithSolution = 15;
+        bool allowPotions = true;
+        SearchIntent intent = SearchIntent::NONE;
 
         std::default_random_engine rng;
 

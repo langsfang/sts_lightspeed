@@ -69,9 +69,11 @@ namespace sts {
         CardSelectTask cardSelectTask;
 
         std::array<CardId, 3>& discovery_Cards() { return cards; }
+        const std::array<CardId, 3>& discovery_Cards() const { return cards; }
         int& discovery_CopyCount() { return data0; }
         int& dualWield_CopyCount() { return data0; }
         std::array<CardId, 3>& codexCards() { return cards; }
+        const std::array<CardId, 3>& codexCards() const { return cards; }
     };
 
 }

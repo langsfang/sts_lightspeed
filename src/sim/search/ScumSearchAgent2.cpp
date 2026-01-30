@@ -70,6 +70,8 @@ void search::ScumSearchAgent2::playoutBattle(BattleContext &bc) {
                                               (bossSimulationMultiplier * simulationCountBase) : simulationCountBase;
 
         search::BattleScumSearcher2 searcher(bc);
+        searcher.allowPotions = allowPotions;
+        searcher.intent = intent;
         searcher.search(simulationCount, 1000);
 
         if (searcher.outcomePlayerHp > bestOutcomePlayerHp)
@@ -408,4 +410,3 @@ void search::ScumSearchAgent2::stepEventPolicy(GameContext &gc) {
             return;
     }
 }
-
