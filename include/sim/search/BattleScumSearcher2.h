@@ -13,6 +13,8 @@
 #include <random>
 #include <iostream>
 #include <limits>
+#include <cstdint>
+#include <unordered_set>
 
 namespace sts::search {
 
@@ -59,6 +61,7 @@ namespace sts::search {
 
         std::vector<Node*> searchStack;
         std::vector<Action> actionStack;
+        std::unordered_set<std::uint64_t> visitedStateKeys;
 
         explicit BattleScumSearcher2(const BattleContext &bc, EvalFnc evalFnc=&evaluateEndState);
 
@@ -80,6 +83,9 @@ namespace sts::search {
         void enumerateCardActions(Node &node, const BattleContext &bc);
         void enumeratePotionActions(Node &node, const BattleContext &bc);
         void enumerateCardSelectActions(Node &node, const BattleContext &bc);
+        [[nodiscard]] std::uint64_t buildStateKey(const BattleContext &bc) const;
+        [[nodiscard]] bool shouldDedupState(const BattleContext &bc) const;
+        void pruneDuplicateEdges(Node &node, const BattleContext &bc);
         static double evaluateEndState(const BattleContext &rootBc, const BattleContext &bc);
 
         void printSearchTree(std::ostream &os, int levels);
