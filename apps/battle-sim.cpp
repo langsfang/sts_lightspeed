@@ -22,6 +22,40 @@ void search2(search::BattleScumSearcher2 &searcher, int simulations) {
     searcher.search(simulations, 1000);
 }
 
+std::string selectedCardNameForTask(const BattleContext &bc, CardSelectTask task, int idx) {
+    switch (task) {
+        case CardSelectTask::CODEX:
+            if (idx == 3) {
+                return "skip";
+            }
+            return CardInstance(bc.cardSelectInfo.codexCards()[idx]).getName();
+        case CardSelectTask::DISCOVERY:
+            return CardInstance(bc.cardSelectInfo.discovery_Cards()[idx]).getName();
+        case CardSelectTask::HOLOGRAM:
+        case CardSelectTask::LIQUID_MEMORIES_POTION:
+        case CardSelectTask::HEADBUTT:
+        case CardSelectTask::MEDITATE:
+            return bc.cards.discardPile[idx].getName();
+        case CardSelectTask::EXHUME:
+            return bc.cards.exhaustPile[idx].getName();
+        case CardSelectTask::SECRET_TECHNIQUE:
+        case CardSelectTask::SECRET_WEAPON:
+        case CardSelectTask::SEEK:
+            return bc.cards.drawPile[idx].getName();
+        case CardSelectTask::EXHAUST_ONE:
+        case CardSelectTask::FORETHOUGHT:
+        case CardSelectTask::NIGHTMARE:
+        case CardSelectTask::RECYCLE:
+        case CardSelectTask::SETUP:
+        case CardSelectTask::WARCRY:
+        case CardSelectTask::ARMAMENTS:
+        case CardSelectTask::DUAL_WIELD:
+            return bc.cards.hand[idx].getName();
+        default:
+            return "";
+    }
+}
+
 std::string describeAction(const search::Action &action, const BattleContext &bc) {
     if (!action.isValidAction(bc)) {
         return "{ INVALID ACTION }";
@@ -50,6 +84,35 @@ std::string describeAction(const search::Action &action, const BattleContext &bc
                 const auto &monster = bc.monsters.arr[action.getTargetIdx()];
                 os << " to Monster " << action.getTargetIdx() << "(" << monster.getName() << ")";
             }
+            return os.str();
+        }
+        case search::ActionType::SINGLE_CARD_SELECT: {
+            const auto task = bc.cardSelectInfo.cardSelectTask;
+            const auto idx = action.getSelectIdx();
+            os << "{ " << cardSelectTaskStrings[static_cast<int>(task)] << " (" << idx << ")";
+            const auto name = selectedCardNameForTask(bc, task, idx);
+            if (!name.empty()) {
+                os << " " << name;
+            }
+            os << " }";
+            return os.str();
+        }
+        case search::ActionType::MULTI_CARD_SELECT: {
+            const auto task = bc.cardSelectInfo.cardSelectTask;
+            const auto selected = action.getSelectedIdxs();
+            os << "{ " << cardSelectTaskStrings[static_cast<int>(task)];
+            if (selected.empty()) {
+                os << " none";
+            } else {
+                for (int i = 0; i < selected.size(); ++i) {
+                    const auto idx = selected[i];
+                    os << " (" << idx << ") " << bc.cards.hand[idx].getName();
+                    if (i + 1 < selected.size()) {
+                        os << ",";
+                    }
+                }
+            }
+            os << " }";
             return os.str();
         }
         default:
