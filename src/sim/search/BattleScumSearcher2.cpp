@@ -8,6 +8,9 @@
 #include <utility>
 #include <string>
 #include <memory>
+#include <sstream>
+#include <algorithm>
+#include <tuple>
 
 using namespace sts;
 
@@ -17,10 +20,87 @@ namespace sts::search {
     thread_local search::BattleScumSearcher2 *g_debug_scum_search;
 }
 
+namespace {
+    constexpr std::uint64_t kHashSeed = 0x9e3779b97f4a7c15ULL;
+
+    void hashCombine(std::uint64_t &seed, std::uint64_t value) {
+        seed ^= value + kHashSeed + (seed << 6) + (seed >> 2);
+    }
+
+    struct CardKey {
+        int id;
+        int upgradeCount;
+        int specialData;
+        int cost;
+        int costForTurn;
+        bool freeToPlayOnce;
+        bool retain;
+    };
+
+    CardKey toCardKey(const CardInstance &card) {
+        return {
+            static_cast<int>(card.getId()),
+            card.getUpgradeCount(),
+            card.specialData,
+            card.cost,
+            card.costForTurn,
+            card.freeToPlayOnce,
+            card.retain
+        };
+    }
+
+    void hashCardKey(std::uint64_t &seed, const CardKey &card) {
+        hashCombine(seed, static_cast<std::uint64_t>(card.id));
+        hashCombine(seed, static_cast<std::uint64_t>(card.upgradeCount));
+        hashCombine(seed, static_cast<std::uint64_t>(card.specialData));
+        hashCombine(seed, static_cast<std::uint64_t>(card.cost));
+        hashCombine(seed, static_cast<std::uint64_t>(card.costForTurn));
+        hashCombine(seed, static_cast<std::uint64_t>(card.freeToPlayOnce));
+        hashCombine(seed, static_cast<std::uint64_t>(card.retain));
+    }
+
+    void hashCardQueueItem(std::uint64_t &seed, const CardQueueItem &item) {
+        hashCardKey(seed, toCardKey(item.card));
+        hashCombine(seed, static_cast<std::uint64_t>(item.target));
+        hashCombine(seed, static_cast<std::uint64_t>(item.isEndTurn));
+        hashCombine(seed, static_cast<std::uint64_t>(item.triggerOnUse));
+        hashCombine(seed, static_cast<std::uint64_t>(item.ignoreEnergyTotal));
+        hashCombine(seed, static_cast<std::uint64_t>(item.energyOnUse));
+        hashCombine(seed, static_cast<std::uint64_t>(item.freeToPlay));
+        hashCombine(seed, static_cast<std::uint64_t>(item.randomTarget));
+        hashCombine(seed, static_cast<std::uint64_t>(item.autoplay));
+        hashCombine(seed, static_cast<std::uint64_t>(item.regretCardCount));
+        hashCombine(seed, static_cast<std::uint64_t>(item.purgeOnUse));
+        hashCombine(seed, static_cast<std::uint64_t>(item.exhaustOnUse));
+    }
+
+    void hashRngState(std::uint64_t &seed, const Random &rng) {
+        hashCombine(seed, static_cast<std::uint64_t>(rng.counter));
+        hashCombine(seed, rng.seed0);
+        hashCombine(seed, rng.seed1);
+    }
+
+    template <typename Iterator>
+    void hashCardGroupSorted(std::uint64_t &seed, Iterator begin, Iterator end) {
+        std::vector<CardKey> cards;
+        for (auto it = begin; it != end; ++it) {
+            cards.push_back(toCardKey(*it));
+        }
+        std::sort(cards.begin(), cards.end(), [](const auto &a, const auto &b) {
+            return std::tie(a.id, a.upgradeCount, a.specialData, a.cost, a.costForTurn, a.freeToPlayOnce, a.retain) <
+                   std::tie(b.id, b.upgradeCount, b.specialData, b.cost, b.costForTurn, b.freeToPlayOnce, b.retain);
+        });
+        for (const auto &card : cards) {
+            hashCardKey(seed, card);
+        }
+    }
+}
+
 
 
 search::BattleScumSearcher2::BattleScumSearcher2(const BattleContext &bc, search::EvalFnc _evalFnc)
     : rootState(new BattleContext(bc)), evalFnc(std::move(_evalFnc)), randGen(bc.seed+bc.floorNum) {
+    visitedStateKeys.insert(buildStateKey(*rootState));
 }
 
 void search::BattleScumSearcher2::search(int64_t simulations, long maxTimeMillis) {
@@ -72,6 +152,11 @@ void search::BattleScumSearcher2::step() {
 
             ++simulationIdx;
             enumerateActionsForNode(curNode, curState, false);
+            pruneDuplicateEdges(curNode, curState);
+            if (curNode.edges.empty()) {
+                updateFromPlayout(searchStack, actionStack, curState);
+                return;
+            }
             const auto selectIdx = selectFirstActionForLeafNode(curNode);
             auto &edgeTaken = curNode.edges[selectIdx];
 
@@ -96,6 +181,119 @@ void search::BattleScumSearcher2::step() {
             searchStack.push_back(&edgeTaken.node);
         }
     }
+}
+
+std::uint64_t search::BattleScumSearcher2::buildStateKey(const BattleContext &bc) const {
+    std::uint64_t seed = 0;
+    hashCombine(seed, static_cast<std::uint64_t>(bc.energyWasted));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.cardsDrawn));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.outcome));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.inputState));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.monsterTurnIdx));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.turn));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.isBattleOver));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.endTurnQueued));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.turnHasEnded));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.skipMonsterTurn));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.miscBits.to_ullong()));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.actionQueue.size));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.actionQueue.front));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.actionQueue.back));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.actionQueue.bits.to_ullong()));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.cardQueue.size));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.cardQueue.frontIdx));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.cardQueue.backIdx));
+
+    hashCombine(seed, static_cast<std::uint64_t>(bc.cardSelectInfo.cardSelectTask));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.cardSelectInfo.canPickZero));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.cardSelectInfo.canPickAnyNumber));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.cardSelectInfo.pickCount));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.cardSelectInfo.data0));
+    for (const auto &cardId : bc.cardSelectInfo.cards) {
+        hashCombine(seed, static_cast<std::uint64_t>(cardId));
+    }
+
+    hashCombine(seed, static_cast<std::uint64_t>(bc.potionCount));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.potionCapacity));
+    for (int i = 0; i < bc.potionCapacity; ++i) {
+        hashCombine(seed, static_cast<std::uint64_t>(bc.potions[i]));
+    }
+
+    hashRngState(seed, bc.aiRng);
+    hashRngState(seed, bc.cardRandomRng);
+    hashRngState(seed, bc.miscRng);
+    hashRngState(seed, bc.monsterHpRng);
+    hashRngState(seed, bc.potionRng);
+    hashRngState(seed, bc.shuffleRng);
+
+    if (bc.cardQueue.size > 0) {
+        int idx = bc.cardQueue.frontIdx;
+        for (int i = 0; i < bc.cardQueue.size; ++i) {
+            if (idx >= CardQueue::capacity) {
+                idx = 0;
+            }
+            hashCardQueueItem(seed, bc.cardQueue.arr[idx]);
+            ++idx;
+        }
+    }
+    hashCardQueueItem(seed, bc.curCardQueueItem);
+
+    hashCombine(seed, static_cast<std::uint64_t>(bc.cards.nextUniqueCardId));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.cards.handNormalityCount));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.cards.handPainCount));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.cards.strikeCount));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.cards.handBloodCardCount));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.cards.drawPileBloodCardCount));
+    hashCombine(seed, static_cast<std::uint64_t>(bc.cards.discardPileBloodCardCount));
+
+    hashCardGroupSorted(seed, bc.cards.hand.begin(), bc.cards.hand.begin() + bc.cards.cardsInHand);
+    hashCardGroupSorted(seed, bc.cards.drawPile.begin(), bc.cards.drawPile.end());
+    hashCardGroupSorted(seed, bc.cards.discardPile.begin(), bc.cards.discardPile.end());
+    hashCardGroupSorted(seed, bc.cards.exhaustPile.begin(), bc.cards.exhaustPile.end());
+    hashCardGroupSorted(seed, bc.cards.limbo.begin(), bc.cards.limbo.end());
+    hashCardGroupSorted(seed, bc.cards.stasisCards.begin(), bc.cards.stasisCards.end());
+
+    std::ostringstream os;
+    os << bc.monsters;
+    hashCombine(seed, std::hash<std::string>{}(os.str()));
+    os.str("");
+    os.clear();
+    os << bc.player;
+    hashCombine(seed, std::hash<std::string>{}(os.str()));
+
+    return seed;
+}
+
+bool search::BattleScumSearcher2::shouldDedupState(const BattleContext &bc) const {
+    return bc.actionQueue.size == 0
+           && bc.cardQueue.size == 0
+           && (bc.inputState == InputState::PLAYER_NORMAL || bc.inputState == InputState::CARD_SELECT);
+}
+
+void search::BattleScumSearcher2::pruneDuplicateEdges(search::BattleScumSearcher2::Node &node, const BattleContext &bc) {
+    if (!shouldDedupState(bc)) {
+        return;
+    }
+
+    std::vector<Edge> uniqueEdges;
+    uniqueEdges.reserve(node.edges.size());
+
+    for (auto &edge : node.edges) {
+        BattleContext nextState(bc);
+        edge.action.execute(nextState);
+
+        if (!shouldDedupState(nextState)) {
+            uniqueEdges.push_back(std::move(edge));
+            continue;
+        }
+
+        const auto key = buildStateKey(nextState);
+        if (visitedStateKeys.insert(key).second) {
+            uniqueEdges.push_back(std::move(edge));
+        }
+    }
+
+    node.edges = std::move(uniqueEdges);
 }
 
 void search::BattleScumSearcher2::updateFromPlayout(const std::vector<Node *> &stack, const std::vector<Action> &actionStack, const BattleContext &endState) {
