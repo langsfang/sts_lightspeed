@@ -16,6 +16,13 @@
 
 namespace sts::search {
 
+    enum class SearchIntent {
+        NONE,
+        PREFER_ATTACK,
+        PREFER_DEFENSE,
+        PREFER_ABILITY
+    };
+
     typedef std::function<double (const BattleContext&, const BattleContext&)> EvalFnc;
 
     // to find a solution to a battle with tree pruning
@@ -40,9 +47,12 @@ namespace sts::search {
         double unexploredNodeValueParameter = 100.0; // only needs to be large enough to be larger than any realistic value of the quality term + the exploration term
         double explorationParameter = 3*sqrt(2);
 
-        double bestActionValue = std::numeric_limits<double>::min();
+        double bestActionValue = std::numeric_limits<double>::lowest();
         double minActionValue = std::numeric_limits<double>::max();
         int outcomePlayerHp = 0;
+
+        bool allowPotions = true;
+        SearchIntent intent = SearchIntent::NONE;
 
         std::vector<Action> bestActionSequence;
         std::default_random_engine randGen;

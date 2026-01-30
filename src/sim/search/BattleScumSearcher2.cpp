@@ -232,7 +232,9 @@ void search::BattleScumSearcher2::enumerateActionsForNode(search::BattleScumSear
     switch (bc.inputState) {
         case InputState::PLAYER_NORMAL:
             enumerateCardActions(node, bc);
-            enumeratePotionActions(node, bc);
+            if (allowPotions) {
+                enumeratePotionActions(node, bc);
+            }
 
             // skip end turn for random rollouts because it's such a terrible choice that it
             // makes it incredibly hard for the tree search to find good choices
@@ -270,7 +272,13 @@ void search::BattleScumSearcher2::enumerateCardActions(search::BattleScumSearche
         return;
     }
 
-    fixed_list<std::pair<int,int>, 10> playableHandIdxs;
+    struct CardOption {
+        int handIdx;
+        int playOrdering;
+        int intentPriority;
+    };
+
+    fixed_list<CardOption, 10> playableHandIdxs;
     for (int handIdx = 0; handIdx < bc.cards.cardsInHand; ++handIdx) {
         const auto &c = bc.cards.hand[handIdx];
         if (!c.canUseOnAnyTarget(bc)) {
@@ -299,14 +307,28 @@ void search::BattleScumSearcher2::enumerateCardActions(search::BattleScumSearche
 
         if (isUniqueAction) {
             // this is being called a *lot* maybe swap it for a lookup table instead of a switch statement
-            playableHandIdxs.push_back( {handIdx, search::Expert::getPlayOrdering(c.getId())} );
+            int intentPriority = 0;
+            if (intent != SearchIntent::NONE) {
+                const auto cardType = c.getType();
+                const bool matchesIntent =
+                        (intent == SearchIntent::PREFER_ATTACK && cardType == CardType::ATTACK) ||
+                        (intent == SearchIntent::PREFER_DEFENSE && cardType == CardType::SKILL) ||
+                        (intent == SearchIntent::PREFER_ABILITY && cardType == CardType::POWER);
+                intentPriority = matchesIntent ? 0 : 1;
+            }
+            playableHandIdxs.push_back({handIdx, search::Expert::getPlayOrdering(c.getId()), intentPriority});
         }
     }
 
-    std::sort(playableHandIdxs.begin(), playableHandIdxs.end(), [](auto a, auto b) { return a.second < b.second; });
+    std::sort(playableHandIdxs.begin(), playableHandIdxs.end(), [](const auto &a, const auto &b) {
+        if (a.intentPriority != b.intentPriority) {
+            return a.intentPriority < b.intentPriority;
+        }
+        return a.playOrdering < b.playOrdering;
+    });
 
-    for (auto pair : playableHandIdxs) {
-        const auto handIdx = pair.first;
+    for (const auto &option : playableHandIdxs) {
+        const auto handIdx = option.handIdx;
         const auto &c = bc.cards.hand[handIdx];
 
         if (c.requiresTarget()) {

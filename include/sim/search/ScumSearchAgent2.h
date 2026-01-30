@@ -14,6 +14,8 @@
 
 namespace sts::search {
 
+    enum class SearchIntent : int;
+
     class BattleScumSearcher2;
 
     struct ScumSearchAgent2 {
@@ -31,6 +33,8 @@ namespace sts::search {
         double bossSimulationMultiplier = 3;
         int stepsNoSolution = 5;
         int stepsWithSolution = 15;
+        bool allowPotions = true;
+        SearchIntent intent = SearchIntent::NONE;
 
         std::default_random_engine rng;
 
