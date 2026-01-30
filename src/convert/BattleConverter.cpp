@@ -109,7 +109,9 @@ BattleContext BattleConverter::convertFromJson(const nlohmann::json &json, int *
         monster->maxHp = m["max_hp"];
         monster->block = m["block"];
 
-        monster->isEscapingB = m["is_escaping"];
+        // monster->isEscapingB = m["is_escaping"];
+        if(m.contains("is_escaping")) 
+            monster->isEscapingB = m["is_escaping"];
         monster->halfDead = m["half_dead"];
 
         // createMonster increments monstersAlive,

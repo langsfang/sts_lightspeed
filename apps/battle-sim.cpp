@@ -20,9 +20,18 @@ void search2(search::BattleScumSearcher2 &searcher, int simulations) {
     searcher.search(simulations, 1000);
 }
 
-int main() {
+#include <fstream>
+#include <sstream>
+#include <string>
+
+int main(int argc, char *argv[]) {
     std::string jsonString;
-    std::getline(std::cin, jsonString);
+    std::ifstream file(argv[1]);
+    if (file) {
+        std::ostringstream ss;
+        ss << file.rdbuf();
+        jsonString = ss.str();
+    }
 
     nlohmann::json json = nlohmann::json::parse(jsonString);
     BattleConverter converter;
