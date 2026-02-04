@@ -68,24 +68,24 @@ std::string describeAction(const search::Action &action, const BattleContext &bc
     switch (action.getActionType()) {
         case search::ActionType::CARD: {
             const auto &card = bc.cards.hand[action.getSourceIdx()];
-            os << "play card " << action.getSourceIdx() << "(" << card.getName() << ")";
+            os << "play " << action.getSourceIdx() + 1;
             if (card.requiresTarget()) {
-                const auto &monster = bc.monsters.arr[action.getTargetIdx()];
-                os << " to Monster " << action.getTargetIdx() << "(" << monster.getName() << ")";
+                // const auto &monster = bc.monsters.arr[action.getTargetIdx()];
+                os << " " << action.getTargetIdx();
             }
             return os.str();
         }
         case search::ActionType::POTION: {
             const auto potion = bc.potions[action.getSourceIdx()];
             if (action.getTargetIdx() == -1) {
-                os << "discard potion ";
+                os << "potion discard ";
             } else {
-                os << "drink potion ";
+                os << "potion use ";
             }
-            os << action.getSourceIdx() << "(" << getPotionName(potion) << ")";
+            os << action.getSourceIdx();
             if (potionRequiresTarget(potion)) {
-                const auto &monster = bc.monsters.arr[action.getTargetIdx()];
-                os << " to Monster " << action.getTargetIdx() << "(" << monster.getName() << ")";
+                // const auto &monster = bc.monsters.arr[action.getTargetIdx()];
+                os << " " << action.getTargetIdx();
             }
             return os.str();
         }
@@ -116,6 +116,10 @@ std::string describeAction(const search::Action &action, const BattleContext &bc
                 }
             }
             os << " }";
+            return os.str();
+        }
+        case search::ActionType::END_TURN: {
+            os << "end";
             return os.str();
         }
         default:
