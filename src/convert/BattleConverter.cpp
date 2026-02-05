@@ -208,6 +208,16 @@ BattleContext BattleConverter::convertFromJson(const nlohmann::json &json, int *
         bc.cards.notifyAddCardToCombat(cardInstance);
     }
 
+    auto exhaustPile = json["game_state"]["combat_state"]["exhaust_pile"];
+    for (int i = 0; i < exhaustPile.size(); ++i) {
+        auto c = exhaustPile[i];
+        CardId cardId = getCardIdFromId(c["id"]);
+        CardInstance cardInstance(cardId, c["upgrades"] > 0);
+        cardInstance.costForTurn = static_cast<int8_t>(c["cost"]);
+        cardInstance.uniqueId = uniqueCardId++;
+        bc.cards.exhaustPile.push_back(cardInstance);
+    }
+
     bc.cards.nextUniqueCardId = uniqueCardId;
 
     auto powers = json["game_state"]["combat_state"]["player"]["powers"];
