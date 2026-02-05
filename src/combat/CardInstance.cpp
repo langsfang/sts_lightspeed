@@ -29,11 +29,12 @@ CardType CardInstance::getType() const {
     return getCardType(id);
 }
 
-const char *CardInstance::getName() const {
+std::string CardInstance::getName() const {
+    std::string ret =  cardNames[static_cast<int>(id)];
     if (upgraded) {
-
+        ret += "+";
     }
-    return cardNames[static_cast<int>(id)];
+    return ret;
 }
 
 std::int16_t CardInstance::getUniqueId() const {

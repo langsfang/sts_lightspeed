@@ -41,7 +41,7 @@ namespace sts {
 
         [[nodiscard]] CardId getId() const;
         [[nodiscard]] CardType getType() const;
-        [[nodiscard]] const char *getName() const;
+        [[nodiscard]] std::string getName() const;
         [[nodiscard]] std::int16_t getUniqueId() const;
         [[nodiscard]] bool isUpgraded() const;
         [[nodiscard]] int getUpgradeCount() const;

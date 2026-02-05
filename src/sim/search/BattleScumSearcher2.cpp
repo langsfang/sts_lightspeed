@@ -726,7 +726,8 @@ double search::BattleScumSearcher2::evaluateEndState(const BattleContext &rootBc
     // gives end state values normalized to the range (-1.0, 1.0)
     if (bc.outcome == Outcome::PLAYER_VICTORY) {
         // produces winning scores in the range (0.0, 1.0)
-        return bc.player.curHp / 100.0f; 
+        return bc.player.curHp / rootBc.player.curHp; 
+        // return bc.player.curHp / 100.0f; 
     } else {
         double curHpTotal = getNonMinionMonsterCurHpTotal(bc);
         double maxHpTotal = getNonMinionMonsterMaxHpTotal(rootBc);
