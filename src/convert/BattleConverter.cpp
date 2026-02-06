@@ -68,6 +68,7 @@ BattleContext BattleConverter::convertFromJson(const nlohmann::json &json, int *
     int uniqueCardId = 0;
 
     auto monsters = json["game_state"]["combat_state"]["monsters"];
+    int gameMonsterTargetIdx = 0;
     int monstersIdx = 0;
     int preplacedIdx = computePreplacedIdx(monsters);
     for (int i = 0; i < monsters.size(); ++i) {
