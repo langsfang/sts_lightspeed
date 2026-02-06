@@ -76,13 +76,12 @@ BattleContext BattleConverter::convertFromJson(const nlohmann::json &json, int *
         MonsterId monsterId = getMonsterIdFromId(m["id"]);
         int convertedTargetIdx = i;
         
-        // any monster that has been defeated can be removed from consideration entirely
-        // this is necessary because the simulator expects at most 5 monsters to exist
-        // and during some fights (ex. slime boss) there exist more than 5 monsters if
-        // we consider the "gone" ones (which communication mod does)
-        // if (m["is_gone"]) {
-        //     continue;
-        // }
+        // skip monsters that are already gone: simulator monster array supports at most 5 active slots,
+        // while communication-mod history can keep gone summons and exceed 5 total entries.
+        // map output target ids to current in-battle slots (same slots used by simulator targeting).
+        if (m["is_gone"]) {
+            continue;
+        }
 
         Monster *monster;
         
@@ -97,13 +96,13 @@ BattleContext BattleConverter::convertFromJson(const nlohmann::json &json, int *
             int cachedCount = bc.monsters.monsterCount;
             bc.monsters.monsterCount = preplacedIdx;
             bc.monsters.createMonster(bc, monsterId);
-            monsterIdxMap[preplacedIdx] = convertedTargetIdx;
+            monsterIdxMap[preplacedIdx] = preplacedIdx;
             monster = &bc.monsters.arr[preplacedIdx];
             // restore the previous position in the MonsterGroup
             bc.monsters.monsterCount = cachedCount;
         } else {
             bc.monsters.createMonster(bc, monsterId);
-            monsterIdxMap[monstersIdx] = convertedTargetIdx;
+            monsterIdxMap[monstersIdx] = monstersIdx;
             monster = &bc.monsters.arr[monstersIdx++];
         }
 
