@@ -73,7 +73,7 @@ BattleContext BattleConverter::convertFromJson(const nlohmann::json &json, int *
     for (int i = 0; i < monsters.size(); ++i) {
         auto m = monsters[i];
         MonsterId monsterId = getMonsterIdFromId(m["id"]);
-        int convertedTargetIdx = m.contains("monster_index") ? static_cast<int>(m["monster_index"]) : i;
+        int convertedTargetIdx = i;
         
         // any monster that has been defeated can be removed from consideration entirely
         // this is necessary because the simulator expects at most 5 monsters to exist
