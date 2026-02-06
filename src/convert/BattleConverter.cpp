@@ -68,11 +68,13 @@ BattleContext BattleConverter::convertFromJson(const nlohmann::json &json, int *
     int uniqueCardId = 0;
 
     auto monsters = json["game_state"]["combat_state"]["monsters"];
+    int gameMonsterTargetIdx = 0;
     int monstersIdx = 0;
     int preplacedIdx = computePreplacedIdx(monsters);
     for (int i = 0; i < monsters.size(); ++i) {
         auto m = monsters[i];
         MonsterId monsterId = getMonsterIdFromId(m["id"]);
+        int convertedTargetIdx = i;
         
         // skip monsters that are already gone: simulator monster array supports at most 5 active slots,
         // while communication-mod history can keep gone summons and exceed 5 total entries.
