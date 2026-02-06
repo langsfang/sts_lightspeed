@@ -59,7 +59,14 @@ std::string selectedCardNameForTask(const BattleContext &bc, CardSelectTask task
     }
 }
 
-std::string describeAction(const search::Action &action, const BattleContext &bc) {
+int getGameTargetIdx(const int *monsterIdxMap, int targetIdx) {
+    if (targetIdx < 0 || targetIdx >= 5 || monsterIdxMap == nullptr) {
+        return targetIdx;
+    }
+    return monsterIdxMap[targetIdx];
+}
+
+std::string describeAction(const search::Action &action, const BattleContext &bc, const int *monsterIdxMap) {
     if (!action.isValidAction(bc)) {
         return "{ INVALID ACTION }";
     }
@@ -71,7 +78,7 @@ std::string describeAction(const search::Action &action, const BattleContext &bc
             os << "play " << action.getSourceIdx() + 1;
             if (card.requiresTarget()) {
                 // const auto &monster = bc.monsters.arr[action.getTargetIdx()];
-                os << " " << action.getTargetIdx();
+                os << " " << getGameTargetIdx(monsterIdxMap, action.getTargetIdx());
             }
             return os.str();
         }
@@ -85,7 +92,7 @@ std::string describeAction(const search::Action &action, const BattleContext &bc
             os << action.getSourceIdx();
             if (potionRequiresTarget(potion)) {
                 // const auto &monster = bc.monsters.arr[action.getTargetIdx()];
-                os << " " << action.getTargetIdx();
+                os << " " << getGameTargetIdx(monsterIdxMap, action.getTargetIdx());
             }
             return os.str();
         }
@@ -209,7 +216,7 @@ int main(int argc, char *argv[]) {
     BattleContext replayState = *searchers[bestSearcherIdx]->rootState;
     nlohmann::json actionDescriptions = nlohmann::json::array();
     for (const auto &action : searchers[bestSearcherIdx]->bestActionSequence) {
-        actionDescriptions.push_back(describeAction(action, replayState));
+        actionDescriptions.push_back(describeAction(action, replayState, monsterIdxMap));
         action.execute(replayState);
     }
 

@@ -68,11 +68,13 @@ BattleContext BattleConverter::convertFromJson(const nlohmann::json &json, int *
     int uniqueCardId = 0;
 
     auto monsters = json["game_state"]["combat_state"]["monsters"];
+    int gameMonsterTargetIdx = 0;
     int monstersIdx = 0;
     int preplacedIdx = computePreplacedIdx(monsters);
     for (int i = 0; i < monsters.size(); ++i) {
         auto m = monsters[i];
         MonsterId monsterId = getMonsterIdFromId(m["id"]);
+        int convertedTargetIdx = m["is_gone"] ? -1 : gameMonsterTargetIdx++;
         
         // any monster that has been defeated can be removed from consideration entirely
         // this is necessary because the simulator expects at most 5 monsters to exist
@@ -95,13 +97,13 @@ BattleContext BattleConverter::convertFromJson(const nlohmann::json &json, int *
             int cachedCount = bc.monsters.monsterCount;
             bc.monsters.monsterCount = preplacedIdx;
             bc.monsters.createMonster(bc, monsterId);
-            monsterIdxMap[preplacedIdx] = i;
+            monsterIdxMap[preplacedIdx] = convertedTargetIdx;
             monster = &bc.monsters.arr[preplacedIdx];
             // restore the previous position in the MonsterGroup
             bc.monsters.monsterCount = cachedCount;
         } else {
             bc.monsters.createMonster(bc, monsterId);
-            monsterIdxMap[monstersIdx] = i;
+            monsterIdxMap[monstersIdx] = convertedTargetIdx;
             monster = &bc.monsters.arr[monstersIdx++];
         }
 
