@@ -3151,7 +3151,58 @@ namespace sts {
             << ", seed: " << bc.seed
             << "\n";
 
-        os << bc.monsters;
+        const std::string s = "\n\t";
+        os << "MonsterGroup { ";
+        os << s << "monsterCount: " << bc.monsters.monsterCount;
+        os << s << "monstersAlive: " << bc.monsters.monstersAlive;
+        os << s << "extraRollMoveOnTurnBits: " << bc.monsters.extraRollMoveOnTurn.to_string();
+
+        for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+            const auto &m = bc.monsters.arr[i];
+
+            os << s << "{";
+            os << m.idx << " " << sts::monsterIdEnumNames[(int) m.id]
+               << " hp:(" << m.curHp << "/" << m.maxHp << ")"
+               << " block:(" << m.block << ") statusEffects:{";
+
+            bool havePrint = false;
+            if (m.getStatusInternal(MS::STRENGTH)) {
+                os << '(' << enemyStatusStrings[(int)MS::STRENGTH] << "," << m.getStatusInternal(MS::STRENGTH) << ")";
+                havePrint = true;
+            }
+            for (int statusIdx = static_cast<int>(MS::ARTIFACT); statusIdx <= static_cast<int>(MS::STASIS); ++statusIdx) {
+                const auto sStatus = static_cast<MS>(statusIdx);
+                if (sStatus != MonsterStatus::STRENGTH && m.getStatusInternal(sStatus)) {
+                    if (havePrint) {
+                        os << ", ";
+                    }
+                    havePrint = true;
+                    os << '(' << enemyStatusStrings[statusIdx];
+                    if (!isBooleanPower(sStatus)) {
+                        os << "," << m.getStatusInternal(sStatus);
+                    }
+                    os << ")";
+                }
+            }
+            os << "}";
+
+            os << " halfDead: " << m.halfDead
+               << ", moveHistory: { " << monsterMoveStrings[(int) m.moveHistory[0]] << ", " << monsterMoveStrings[(int) m.moveHistory[1]] << "}";
+
+            std::string nextActionDamage = "0x0";
+            if (m.isAttacking()) {
+                const auto info = m.getMoveBaseDamage(bc);
+                const auto damage = m.calculateDamageToPlayer(bc, info.damage);
+                nextActionDamage = std::to_string(damage) + "x" + std::to_string(info.attackCount);
+            }
+
+            os << " nextActionDamage: " << nextActionDamage
+               << " miscInfo: " << m.miscInfo
+               << " uniquePower0: " << m.uniquePower0
+               << " uniquePower1: " << m.uniquePower1
+               << "}";
+        }
+        os << "\n}\n";
         os << bc.player;
         os << "chosen class:(" << static_cast<int>(bc.player.cc) << ")\n"; 
         os << bc.cards;
