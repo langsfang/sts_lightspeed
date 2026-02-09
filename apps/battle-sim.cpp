@@ -22,7 +22,7 @@ using namespace sts;
 using namespace std::chrono;
 
 void search2(search::BattleScumSearcher2 &searcher, int simulations) {
-    searcher.search(simulations, 1000);
+    searcher.search(simulations, 10000);
 }
 
 std::string selectedCardNameForTask(const BattleContext &bc, CardSelectTask task, int idx) {
@@ -188,6 +188,9 @@ int main(int argc, char *argv[]) {
     outfile.open("test.log", std::ios_base::app);
     outfile << "====" << std::endl;
     outfile << baseBc << std::endl;
+
+    int bestActionIdx = 0;
+    float bestScore = -1.;
     for (int j = 0; j < searchers[0]->root.edges.size(); ++j) {
         double evaluationSum = 0;
         int simulationCount = 0;
@@ -195,7 +198,13 @@ int main(int argc, char *argv[]) {
             evaluationSum += searchers[i]->root.edges[j].node.evaluationSum;
             simulationCount += searchers[i]->root.edges[j].node.simulationCount;
         }
-        outfile << simulationCount << " visits / " << std::fixed << std::setprecision(3) << (evaluationSum / simulationCount) << " value for ";
+        double score = evaluationSum/(1.0*simulationCount);
+        outfile <<j <<":"<< simulationCount << " visits / " << std::fixed << std::setprecision(5) << score << " value for ";
+        if(bestScore < score) {
+            bestActionIdx = j;
+            bestScore = score;
+        }
+
         searchers[0]->root.edges[j].action.printDesc(outfile, baseBc);
         outfile << std::endl;
     }
@@ -204,21 +213,16 @@ int main(int argc, char *argv[]) {
         monsterIdxMapJson[i] = monsterIdxMap[i];
     }
 
-    int bestSearcherIdx = 0;
-    double bestValue = searchers[0]->bestActionValue;
-    for (int i = 1; i < thread_count; ++i) {
-        if (searchers[i]->bestActionValue > bestValue) {
-            bestSearcherIdx = i;
-            bestValue = searchers[i]->bestActionValue;
-        }
-    }
-
-    BattleContext replayState = *searchers[bestSearcherIdx]->rootState;
     nlohmann::json actionDescriptions = nlohmann::json::array();
-    for (const auto &action : searchers[bestSearcherIdx]->bestActionSequence) {
-        actionDescriptions.push_back(describeAction(action, replayState, monsterIdxMap));
-        action.execute(replayState);
-    }
+    auto action = searchers[0]->root.edges[bestActionIdx].action;
+    outfile <<"choose:\t"<<bestActionIdx<<"\n";
+    action.printDesc(outfile, baseBc);
+    actionDescriptions.push_back(describeAction(action, baseBc, monsterIdxMap));
+
+    action.execute(baseBc);
+
+    // search the next action if it's card selection
+    // TODO
 
     nlohmann::json output = nlohmann::json::object();
     output["monsterIdxMap"] = monsterIdxMapJson;

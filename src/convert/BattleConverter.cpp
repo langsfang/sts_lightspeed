@@ -68,13 +68,11 @@ BattleContext BattleConverter::convertFromJson(const nlohmann::json &json, int *
     int uniqueCardId = 0;
 
     auto monsters = json["game_state"]["combat_state"]["monsters"];
-    int gameMonsterTargetIdx = 0;
     int monstersIdx = 0;
     int preplacedIdx = computePreplacedIdx(monsters);
     for (int i = 0; i < monsters.size(); ++i) {
         auto m = monsters[i];
         MonsterId monsterId = getMonsterIdFromId(m["id"]);
-        int convertedTargetIdx = i;
         
         // skip monsters that are already gone: simulator monster array supports at most 5 active slots,
         // while communication-mod history can keep gone summons and exceed 5 total entries.
@@ -96,13 +94,13 @@ BattleContext BattleConverter::convertFromJson(const nlohmann::json &json, int *
             int cachedCount = bc.monsters.monsterCount;
             bc.monsters.monsterCount = preplacedIdx;
             bc.monsters.createMonster(bc, monsterId);
-            monsterIdxMap[preplacedIdx] = preplacedIdx;
+            monsterIdxMap[preplacedIdx] = i;
             monster = &bc.monsters.arr[preplacedIdx];
             // restore the previous position in the MonsterGroup
             bc.monsters.monsterCount = cachedCount;
         } else {
             bc.monsters.createMonster(bc, monsterId);
-            monsterIdxMap[monstersIdx] = monstersIdx;
+            monsterIdxMap[monstersIdx] = i;
             monster = &bc.monsters.arr[monstersIdx++];
         }
 
@@ -175,6 +173,7 @@ BattleContext BattleConverter::convertFromJson(const nlohmann::json &json, int *
 
     bc.partialInitTwo(gc);
     bc.player.energy = json["game_state"]["combat_state"]["player"]["energy"];
+    bc.player.block = json["game_state"]["combat_state"]["player"]["block"];
 
     auto drawPile = json["game_state"]["combat_state"]["draw_pile"];
     for (int i = 0; i < drawPile.size(); ++i) {
