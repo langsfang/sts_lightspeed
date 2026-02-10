@@ -54,6 +54,7 @@ namespace sts::search {
         EvalFnc evalFnc;
         double unexploredNodeValueParameter = 100.0; // only needs to be large enough to be larger than any realistic value of the quality term + the exploration term
         double explorationParameter = 3*sqrt(2);
+        double chanceNodeBackpropWeight = 0.85;
 
         double bestActionValue = std::numeric_limits<double>::lowest();
         double minActionValue = std::numeric_limits<double>::max();
@@ -78,6 +79,7 @@ namespace sts::search {
         // private helpers
         void updateFromPlayout(const std::vector<Node*> &stack, const std::vector<Action> &actionStack, const BattleContext &endState);
         [[nodiscard]] bool isTerminalState(const BattleContext &bc) const;
+        [[nodiscard]] bool transitionHasRandomEvent(const BattleContext &before, const BattleContext &after) const;
 
         double evaluateEdge(const Node &parent, int edgeIdx);
         int selectBestEdgeToSearch(const Node &cur);

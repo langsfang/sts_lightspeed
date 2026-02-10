@@ -175,7 +175,11 @@ void search::BattleScumSearcher2::step() {
             const auto selectIdx = selectFirstActionForLeafNode(curNode, curState);
             auto &edgeTaken = curNode.edges[selectIdx];
 
+            const BattleContext prevState(curState);
             edgeTaken.action.execute(curState);
+            edgeTaken.node.nodeType = transitionHasRandomEvent(prevState, curState)
+                                     ? NodeType::CHANCE
+                                     : NodeType::DECISION;
             actionStack.push_back(edgeTaken.action);
             searchStack.push_back(&edgeTaken.node);
 
@@ -187,7 +191,11 @@ void search::BattleScumSearcher2::step() {
             const auto selectIdx = selectBestEdgeToSearch(curNode);
             auto &edgeTaken = curNode.edges[selectIdx];
 
+            const BattleContext prevState(curState);
             edgeTaken.action.execute(curState);
+            edgeTaken.node.nodeType = transitionHasRandomEvent(prevState, curState)
+                                     ? NodeType::CHANCE
+                                     : NodeType::DECISION;
             actionStack.push_back(edgeTaken.action);
             searchStack.push_back(&edgeTaken.node);
         }
@@ -320,11 +328,28 @@ void search::BattleScumSearcher2::updateFromPlayout(const std::vector<Node *> &s
         minActionValue = evaluation;
     }
 
+    double backedUpValue = evaluation;
     for (auto it = stack.rbegin(); it != stack.rend(); ++it) {
         auto &node = *(*it);
+        if (node.nodeType == NodeType::CHANCE) {
+            backedUpValue *= chanceNodeBackpropWeight;
+        }
         ++node.simulationCount;
-        node.evaluationSum += evaluation;
+        node.evaluationSum += backedUpValue;
     }
+}
+
+bool search::BattleScumSearcher2::transitionHasRandomEvent(const BattleContext &before, const BattleContext &after) const {
+    auto rngChanged = [](const Random &lhs, const Random &rhs) {
+        return lhs.counter != rhs.counter || lhs.seed0 != rhs.seed0 || lhs.seed1 != rhs.seed1;
+    };
+
+    return rngChanged(before.aiRng, after.aiRng)
+           || rngChanged(before.cardRandomRng, after.cardRandomRng)
+           || rngChanged(before.miscRng, after.miscRng)
+           || rngChanged(before.monsterHpRng, after.monsterHpRng)
+           || rngChanged(before.potionRng, after.potionRng)
+           || rngChanged(before.shuffleRng, after.shuffleRng);
 }
 
 bool search::BattleScumSearcher2::isTerminalState(const BattleContext &bc) const { // maybe can optimize by making this evaluate directly if score cannot possibly be higher than best
