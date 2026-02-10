@@ -97,7 +97,7 @@ namespace {
         }
     }
 
-    double evaluateActionHeuristic(const BattleContext &before, const Action &action) {
+    double evaluateActionHeuristic(const BattleContext &before, const search::Action &action) {
         BattleContext after(before);
         action.execute(after);
 
@@ -106,6 +106,7 @@ namespace {
         const double enemyHpDelta = static_cast<double>(getNonMinionMonsterCurHpTotal(before)
                                                       - getNonMinionMonsterCurHpTotal(after));
 
+        // return (hpDelta * 5.0) + (blockDelta * 0.5) + enemyHpDelta;
         return (hpDelta * 5.0) + (blockDelta * 0.5) + enemyHpDelta;
     }
 }
@@ -368,7 +369,6 @@ double search::BattleScumSearcher2::evaluateEdge(const search::BattleScumSearche
 
     double qualityValue = edge.node.evaluationSum / (edge.node.simulationCount+1);
 
-
     double explorationValue = explorationParameter *
             std::sqrt(std::log(parent.simulationCount+1) / (edge.node.simulationCount+1));
 
@@ -469,13 +469,7 @@ void search::BattleScumSearcher2::enumerateActionsForNode(search::BattleScumSear
                 enumeratePotionActions(node, bc);
             }
 
-            // skip end turn for random rollouts because it's such a terrible choice that it
-            // makes it incredibly hard for the tree search to find good choices
-            // this does end up incorporating a bit of expert knowledge but expert knowledge
-            // is typically considered reasonable to add to monte carlo tree search
-            if (!forRandom || node.edges.size() == 0) {
-                node.edges.push_back({Action(ActionType::END_TURN)});
-            }
+            node.edges.push_back({Action(ActionType::END_TURN)});
             break;
 
         case InputState::CARD_SELECT:
@@ -782,7 +776,7 @@ double search::BattleScumSearcher2::evaluateEndState(const BattleContext &rootBc
     // gives end state values normalized to the range (-1.0, 1.0)
     if (bc.outcome == Outcome::PLAYER_VICTORY) {
         // produces winning scores in the range (0.0, 1.0)
-        return bc.player.curHp / rootBc.player.curHp; 
+        return 1.*bc.player.curHp / rootBc.player.curHp; 
         // return bc.player.curHp / 100.0f; 
     } else {
         double curHpTotal = getNonMinionMonsterCurHpTotal(bc);
