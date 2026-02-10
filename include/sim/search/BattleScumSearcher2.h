@@ -75,11 +75,12 @@ namespace sts::search {
 
         double evaluateEdge(const Node &parent, int edgeIdx);
         int selectBestEdgeToSearch(const Node &cur);
-        int selectFirstActionForLeafNode(const Node &leafNode);
+        int selectFirstActionForLeafNode(const Node &leafNode, const BattleContext &state);
 
         void playoutRandom(BattleContext &state, std::vector<Action> &actionStack);
 
         void enumerateActionsForNode(Node &node, const BattleContext &bc, const bool forRandom);
+        void enumerateActionsForRollout(Node &node, const BattleContext &bc);
         void enumerateCardActions(Node &node, const BattleContext &bc);
         void enumeratePotionActions(Node &node, const BattleContext &bc);
         void enumerateCardSelectActions(Node &node, const BattleContext &bc);

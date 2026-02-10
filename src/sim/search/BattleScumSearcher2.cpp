@@ -16,6 +16,8 @@ using namespace sts;
 
 std::int64_t simulationIdx = 0; // for debugging
 
+double getNonMinionMonsterCurHpTotal(const BattleContext &bc);
+
 namespace sts::search {
     thread_local search::BattleScumSearcher2 *g_debug_scum_search;
 }
@@ -94,6 +96,18 @@ namespace {
             hashCardKey(seed, card);
         }
     }
+
+    double evaluateActionHeuristic(const BattleContext &before, const Action &action) {
+        BattleContext after(before);
+        action.execute(after);
+
+        const double hpDelta = static_cast<double>(after.player.curHp - before.player.curHp);
+        const double blockDelta = static_cast<double>(after.player.block - before.player.block);
+        const double enemyHpDelta = static_cast<double>(getNonMinionMonsterCurHpTotal(before)
+                                                      - getNonMinionMonsterCurHpTotal(after));
+
+        return (hpDelta * 5.0) + (blockDelta * 0.5) + enemyHpDelta;
+    }
 }
 
 
@@ -157,7 +171,7 @@ void search::BattleScumSearcher2::step() {
                 updateFromPlayout(searchStack, actionStack, curState);
                 return;
             }
-            const auto selectIdx = selectFirstActionForLeafNode(curNode);
+            const auto selectIdx = selectFirstActionForLeafNode(curNode, curState);
             auto &edgeTaken = curNode.edges[selectIdx];
 
 //            edgeTaken.action.printDesc(std::cout, curState) << std::endl;
@@ -357,9 +371,27 @@ int search::BattleScumSearcher2::selectBestEdgeToSearch(const search::BattleScum
     return bestEdge;
 }
 
-int search::BattleScumSearcher2::selectFirstActionForLeafNode(const search::BattleScumSearcher2::Node &leafNode) {
-    auto dist = std::uniform_int_distribution<int>(0, static_cast<int>(leafNode.edges.size())-1);
-    return dist(randGen);
+int search::BattleScumSearcher2::selectFirstActionForLeafNode(const search::BattleScumSearcher2::Node &leafNode,
+                                                              const BattleContext &state) {
+    if (leafNode.edges.size() == 1) {
+        return 0;
+    }
+
+    std::vector<int> bestIdxs;
+    double bestScore = std::numeric_limits<double>::lowest();
+    for (int i = 0; i < leafNode.edges.size(); ++i) {
+        const auto score = evaluateActionHeuristic(state, leafNode.edges[i].action);
+        if (score > bestScore) {
+            bestScore = score;
+            bestIdxs.clear();
+            bestIdxs.push_back(i);
+        } else if (score == bestScore) {
+            bestIdxs.push_back(i);
+        }
+    }
+
+    auto dist = std::uniform_int_distribution<int>(0, static_cast<int>(bestIdxs.size()) - 1);
+    return bestIdxs[dist(randGen)];
 }
 
 void search::BattleScumSearcher2::playoutRandom(BattleContext &state, std::vector<Action> &actionStack) {
@@ -367,61 +399,42 @@ void search::BattleScumSearcher2::playoutRandom(BattleContext &state, std::vecto
     while (!isTerminalState(state)) {
         ++simulationIdx;
 
-        // attempt fast selection of the random action
-        Action action;
-        switch (state.inputState) {
-            case InputState::PLAYER_NORMAL:
-                if (state.isCardPlayAllowed() && state.cards.cardsInHand > 0) {
-                    auto dist = std::uniform_int_distribution<int>(0, static_cast<int>(state.cards.cardsInHand)-1);
-                    const int cardIdx = dist(randGen);
-                    const auto &c = state.cards.hand[cardIdx];
-                    if (c.canUseOnAnyTarget(state)) {
-                        if (c.requiresTarget() && state.monsters.monsterCount > 0) {
-                            auto dist2 = std::uniform_int_distribution<int>(0, static_cast<int>(state.monsters.monsterCount)-1);
-                            const int monsterIdx = dist(randGen);
-                            const auto &m = state.monsters.arr[monsterIdx];
-                            if (m.isTargetable()) {
-                                action = Action(ActionType::CARD, cardIdx, monsterIdx);
-                            }
-                        } else {
-                            action = Action(ActionType::CARD, cardIdx);
-                        }
-                    }
-                }
-                break;
-                // skip potions because I don't want to write the code for it (this is technically expert knowledge suggesting potions shouldn't be used during rollouts - whatever)
-                // skip end turn because heuristically it's a terrible choice (this is expert knowledge being added to the search)
-            case InputState::CARD_SELECT:
-                break;
-                // skip card select because that code is complicated and it'd be hard to do correctly
-                // in a fast manner - so we just let the normal selection do it
-        };
-
-        // if fast selection was successful use it
-        if (action.isValidAction(state)) {
-            actionStack.push_back(action);
-            action.execute(state);
-
-            tempNode.edges.clear();
-        // otherwise compute all actions and pick one
-        } else {
-            enumerateActionsForNode(tempNode, state, true);
-            if (tempNode.edges.empty()) {
-                std::cerr << state.seed << " " << simulationIdx << std::endl;
-                std::cerr << state.monsters.arr[0].getName() << " " << state.floorNum << " " << monsterEncouterNames[static_cast<int>(state.encounter)] << std::endl;
-                assert(false);
-            }
-
-            auto dist = std::uniform_int_distribution<int>(0, static_cast<int>(tempNode.edges.size())-1);
-            const int selectedIdx = dist(randGen);
-
-            const auto action = tempNode.edges[selectedIdx].action;
-    //        action.printDesc(std::cout, state) << std::endl;
-            actionStack.push_back(action);
-            action.execute(state);
-
-            tempNode.edges.clear();
+        enumerateActionsForRollout(tempNode, state);
+        if (tempNode.edges.empty()) {
+            std::cerr << state.seed << " " << simulationIdx << std::endl;
+            std::cerr << state.monsters.arr[0].getName() << " " << state.floorNum << " " << monsterEncouterNames[static_cast<int>(state.encounter)] << std::endl;
+            assert(false);
         }
+
+        constexpr double kRandomRolloutChance = 0.2;
+        auto distChance = std::uniform_real_distribution<double>(0.0, 1.0);
+        int selectedIdx = 0;
+
+        if (distChance(randGen) < kRandomRolloutChance) {
+            auto dist = std::uniform_int_distribution<int>(0, static_cast<int>(tempNode.edges.size()) - 1);
+            selectedIdx = dist(randGen);
+        } else {
+            std::vector<int> bestIdxs;
+            double bestScore = std::numeric_limits<double>::lowest();
+            for (int i = 0; i < tempNode.edges.size(); ++i) {
+                const auto score = evaluateActionHeuristic(state, tempNode.edges[i].action);
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestIdxs.clear();
+                    bestIdxs.push_back(i);
+                } else if (score == bestScore) {
+                    bestIdxs.push_back(i);
+                }
+            }
+            auto dist = std::uniform_int_distribution<int>(0, static_cast<int>(bestIdxs.size()) - 1);
+            selectedIdx = bestIdxs[dist(randGen)];
+        }
+
+        const auto action = tempNode.edges[selectedIdx].action;
+        actionStack.push_back(action);
+        action.execute(state);
+
+        tempNode.edges.clear();
     }
 }
 
@@ -464,6 +477,27 @@ void search::BattleScumSearcher2::enumerateActionsForNode(search::BattleScumSear
 #endif
 }
 
+void search::BattleScumSearcher2::enumerateActionsForRollout(search::BattleScumSearcher2::Node &node,
+                                                             const BattleContext &bc) {
+    node.edges.clear();
+    switch (bc.inputState) {
+        case InputState::PLAYER_NORMAL:
+            enumerateCardActions(node, bc);
+            node.edges.push_back({Action(ActionType::END_TURN)});
+            break;
+
+        case InputState::CARD_SELECT:
+            enumerateCardSelectActions(node, bc);
+            break;
+
+        default:
+#ifdef sts_asserts
+            std::cerr << "enumerateActionsForRollout: invalid input state: " << static_cast<int>(bc.inputState) << std::endl;
+            assert(false);
+#endif
+            break;
+    }
+}
 void search::BattleScumSearcher2::enumerateCardActions(search::BattleScumSearcher2::Node &node,
                                                             const BattleContext &bc) {
     if (!bc.isCardPlayAllowed()) {
