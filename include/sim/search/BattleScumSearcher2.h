@@ -30,14 +30,23 @@ namespace sts::search {
     // to find a solution to a battle with tree pruning
     struct BattleScumSearcher2 {
         class Edge;
+        enum class NodeType {
+            DECISION,
+            CHANCE,
+        };
+
         struct Node {
             std::int64_t simulationCount = 0;
             double evaluationSum = 0;
+            NodeType nodeType = NodeType::DECISION;
             std::vector<Edge> edges;
         };
 
         struct Edge {
             Action action;
+            double probability = 1.0;
+            int chanceDrawPileIdx = -1;
+            bool isChanceOutcome = false;
             Node node;
         };
 
@@ -76,9 +85,13 @@ namespace sts::search {
         double evaluateEdge(const Node &parent, int edgeIdx);
         int selectBestEdgeToSearch(const Node &cur);
         int selectFirstActionForLeafNode(const Node &leafNode, const BattleContext &state);
+        int selectChanceEdgeToSearch(const Node &chanceNode);
+        void applyChanceOutcome(const Edge &edge, BattleContext &state) const;
 
         void playoutRandom(BattleContext &state, std::vector<Action> &actionStack);
 
+        [[nodiscard]] bool isDrawChanceState(const BattleContext &bc) const;
+        void enumerateChanceOutcomesForNode(Node &node, const BattleContext &bc);
         void enumerateActionsForNode(Node &node, const BattleContext &bc, const bool forRandom);
         void enumerateActionsForRollout(Node &node, const BattleContext &bc);
         void enumerateCardActions(Node &node, const BattleContext &bc);
