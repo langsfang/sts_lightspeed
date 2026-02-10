@@ -165,29 +165,18 @@ void search::BattleScumSearcher2::step() {
         if (isLeaf) {
 
             ++simulationIdx;
-            if (isDrawChanceState(curState)) {
-                curNode.nodeType = NodeType::CHANCE;
-                enumerateChanceOutcomesForNode(curNode, curState);
-            } else {
-                curNode.nodeType = NodeType::DECISION;
-                enumerateActionsForNode(curNode, curState, false);
-                pruneDuplicateEdges(curNode, curState);
-            }
+            curNode.nodeType = NodeType::DECISION;
+            enumerateActionsForNode(curNode, curState, false);
+            pruneDuplicateEdges(curNode, curState);
             if (curNode.edges.empty()) {
                 updateFromPlayout(searchStack, actionStack, curState);
                 return;
             }
-            const auto selectIdx = curNode.nodeType == NodeType::CHANCE
-                    ? selectChanceEdgeToSearch(curNode)
-                    : selectFirstActionForLeafNode(curNode, curState);
+            const auto selectIdx = selectFirstActionForLeafNode(curNode, curState);
             auto &edgeTaken = curNode.edges[selectIdx];
 
-            if (curNode.nodeType == NodeType::CHANCE) {
-                applyChanceOutcome(edgeTaken, curState);
-            } else {
-                edgeTaken.action.execute(curState);
-                actionStack.push_back(edgeTaken.action);
-            }
+            edgeTaken.action.execute(curState);
+            actionStack.push_back(edgeTaken.action);
             searchStack.push_back(&edgeTaken.node);
 
             playoutRandom(curState, actionStack);
@@ -195,17 +184,11 @@ void search::BattleScumSearcher2::step() {
             return;
 
         } else {
-            const auto selectIdx = curNode.nodeType == NodeType::CHANCE
-                    ? selectChanceEdgeToSearch(curNode)
-                    : selectBestEdgeToSearch(curNode);
+            const auto selectIdx = selectBestEdgeToSearch(curNode);
             auto &edgeTaken = curNode.edges[selectIdx];
 
-            if (curNode.nodeType == NodeType::CHANCE) {
-                applyChanceOutcome(edgeTaken, curState);
-            } else {
-                edgeTaken.action.execute(curState);
-                actionStack.push_back(edgeTaken.action);
-            }
+            edgeTaken.action.execute(curState);
+            actionStack.push_back(edgeTaken.action);
             searchStack.push_back(&edgeTaken.node);
         }
     }
@@ -408,52 +391,10 @@ int search::BattleScumSearcher2::selectFirstActionForLeafNode(const search::Batt
     return bestIdxs[dist(randGen)];
 }
 
-int search::BattleScumSearcher2::selectChanceEdgeToSearch(const search::BattleScumSearcher2::Node &chanceNode) {
-    if (chanceNode.edges.size() == 1) {
-        return 0;
-    }
-
-    auto distChance = std::uniform_real_distribution<double>(0.0, 1.0);
-    const auto roll = distChance(randGen);
-
-    double cumulative = 0.0;
-    for (int i = 0; i < chanceNode.edges.size(); ++i) {
-        cumulative += chanceNode.edges[i].probability;
-        if (roll <= cumulative) {
-            return i;
-        }
-    }
-
-    return static_cast<int>(chanceNode.edges.size()) - 1;
-}
-
-void search::BattleScumSearcher2::applyChanceOutcome(const search::BattleScumSearcher2::Edge &edge,
-                                                     BattleContext &state) const {
-    if (!edge.isChanceOutcome) {
-        return;
-    }
-
-    if (edge.chanceDrawPileIdx < 0 || edge.chanceDrawPileIdx >= state.cards.drawPile.size()) {
-        return;
-    }
-
-    const auto card = state.cards.drawPile[edge.chanceDrawPileIdx];
-    state.cards.removeFromDrawPileAtIdx(edge.chanceDrawPileIdx);
-    state.cards.moveToHand(card);
-}
-
 void search::BattleScumSearcher2::playoutRandom(BattleContext &state, std::vector<Action> &actionStack) {
     Node tempNode; // temp
     while (!isTerminalState(state)) {
         ++simulationIdx;
-
-        if (isDrawChanceState(state)) {
-            enumerateChanceOutcomesForNode(tempNode, state);
-            const auto selectedIdx = selectChanceEdgeToSearch(tempNode);
-            applyChanceOutcome(tempNode.edges[selectedIdx], state);
-            tempNode.edges.clear();
-            continue;
-        }
 
         enumerateActionsForRollout(tempNode, state);
         if (tempNode.edges.empty()) {
@@ -491,32 +432,6 @@ void search::BattleScumSearcher2::playoutRandom(BattleContext &state, std::vecto
         action.execute(state);
 
         tempNode.edges.clear();
-    }
-}
-
-bool search::BattleScumSearcher2::isDrawChanceState(const BattleContext &bc) const {
-    return bc.actionQueue.size == 0
-           && bc.cardQueue.size == 0
-           && bc.inputState == InputState::PLAYER_NORMAL
-           && bc.cards.cardsInHand < 10
-           && !bc.cards.drawPile.empty();
-}
-
-void search::BattleScumSearcher2::enumerateChanceOutcomesForNode(search::BattleScumSearcher2::Node &node,
-                                                                  const BattleContext &bc) {
-    node.edges.clear();
-
-    if (!isDrawChanceState(bc)) {
-        return;
-    }
-
-    const double probability = 1.0 / static_cast<double>(bc.cards.drawPile.size());
-    for (int i = 0; i < bc.cards.drawPile.size(); ++i) {
-        Edge edge;
-        edge.probability = probability;
-        edge.chanceDrawPileIdx = i;
-        edge.isChanceOutcome = true;
-        node.edges.push_back(std::move(edge));
     }
 }
 

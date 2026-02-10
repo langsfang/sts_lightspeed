@@ -44,9 +44,6 @@ namespace sts::search {
 
         struct Edge {
             Action action;
-            double probability = 1.0;
-            int chanceDrawPileIdx = -1;
-            bool isChanceOutcome = false;
             Node node;
         };
 
@@ -85,13 +82,9 @@ namespace sts::search {
         double evaluateEdge(const Node &parent, int edgeIdx);
         int selectBestEdgeToSearch(const Node &cur);
         int selectFirstActionForLeafNode(const Node &leafNode, const BattleContext &state);
-        int selectChanceEdgeToSearch(const Node &chanceNode);
-        void applyChanceOutcome(const Edge &edge, BattleContext &state) const;
 
         void playoutRandom(BattleContext &state, std::vector<Action> &actionStack);
 
-        [[nodiscard]] bool isDrawChanceState(const BattleContext &bc) const;
-        void enumerateChanceOutcomesForNode(Node &node, const BattleContext &bc);
         void enumerateActionsForNode(Node &node, const BattleContext &bc, const bool forRandom);
         void enumerateActionsForRollout(Node &node, const BattleContext &bc);
         void enumerateCardActions(Node &node, const BattleContext &bc);
