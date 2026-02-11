@@ -22,6 +22,11 @@ target_link_directories(battle-sim PRIVATE json::nlohmann_json)
 target_include_directories(battle-sim PUBLIC include)
 target_include_directories(battle-sim PUBLIC json/include)
 
+add_executable(battle-agent apps/battle-agent.cpp ${sts_lightspeed_SOURCES})
+target_link_directories(battle-agent PRIVATE json::nlohmann_json)
+target_include_directories(battle-agent PUBLIC include)
+target_include_directories(battle-agent PUBLIC json/include)
+
 add_executable(test apps/test.cpp ${sts_lightspeed_SOURCES})
 target_include_directories(test PUBLIC include)
 target_link_directories(test PUBLIC json::nlohmann_json)
