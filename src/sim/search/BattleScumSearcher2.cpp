@@ -115,7 +115,7 @@ namespace {
 
 search::BattleScumSearcher2::BattleScumSearcher2(const BattleContext &bc, search::EvalFnc _evalFnc)
     : rootState(new BattleContext(bc)), evalFnc(std::move(_evalFnc)), randGen(bc.seed+bc.floorNum) {
-    visitedStateKeys.insert(buildStateKey(*rootState));
+    transpositionTable.emplace(buildStateKey(*rootState), std::shared_ptr<Node>(&root, [] (Node*) {}));
 }
 
 void search::BattleScumSearcher2::search(int64_t simulations, long maxTimeMillis) {
@@ -178,11 +178,11 @@ void search::BattleScumSearcher2::step() {
 
             const BattleContext prevState(curState);
             edgeTaken.action.execute(curState);
-            edgeTaken.node.nodeType = transitionHasRandomEvent(prevState, curState)
-                                     ? NodeType::CHANCE
-                                     : NodeType::DECISION;
+            edgeTaken.node->nodeType = transitionHasRandomEvent(prevState, curState)
+                                      ? NodeType::CHANCE
+                                      : NodeType::DECISION;
             actionStack.push_back(edgeTaken.action);
-            searchStack.push_back(&edgeTaken.node);
+            searchStack.push_back(edgeTaken.node.get());
 
             playoutRandom(curState, actionStack);
             updateFromPlayout(searchStack, actionStack, curState);
@@ -194,11 +194,11 @@ void search::BattleScumSearcher2::step() {
 
             const BattleContext prevState(curState);
             edgeTaken.action.execute(curState);
-            edgeTaken.node.nodeType = transitionHasRandomEvent(prevState, curState)
-                                     ? NodeType::CHANCE
-                                     : NodeType::DECISION;
+            edgeTaken.node->nodeType = transitionHasRandomEvent(prevState, curState)
+                                      ? NodeType::CHANCE
+                                      : NodeType::DECISION;
             actionStack.push_back(edgeTaken.action);
-            searchStack.push_back(&edgeTaken.node);
+            searchStack.push_back(edgeTaken.node.get());
         }
     }
 }
@@ -295,25 +295,20 @@ void search::BattleScumSearcher2::pruneDuplicateEdges(search::BattleScumSearcher
         return;
     }
 
-    std::vector<Edge> uniqueEdges;
-    uniqueEdges.reserve(node.edges.size());
-
     for (auto &edge : node.edges) {
         BattleContext nextState(bc);
         edge.action.execute(nextState);
 
         if (!shouldDedupState(nextState)) {
-            uniqueEdges.push_back(std::move(edge));
             continue;
         }
 
         const auto key = buildStateKey(nextState);
-        if (visitedStateKeys.insert(key).second) {
-            uniqueEdges.push_back(std::move(edge));
+        const auto [it, inserted] = transpositionTable.emplace(key, edge.node);
+        if (!inserted) {
+            edge.node = it->second;
         }
     }
-
-    node.edges = std::move(uniqueEdges);
 }
 
 void search::BattleScumSearcher2::updateFromPlayout(const std::vector<Node *> &stack, const std::vector<Action> &actionStack, const BattleContext &endState) {
@@ -363,14 +358,14 @@ double search::BattleScumSearcher2::evaluateEdge(const search::BattleScumSearche
 
     // unexplored nodes must be assigned a sufficiently large value
     // that they are explored at a priority over any other node
-    if (edge.node.simulationCount == 0) {
+    if (edge.node->simulationCount == 0) {
         return unexploredNodeValueParameter;
     }
 
-    double qualityValue = edge.node.evaluationSum / (edge.node.simulationCount+1);
+    double qualityValue = edge.node->evaluationSum / (edge.node->simulationCount+1);
 
     double explorationValue = explorationParameter *
-            std::sqrt(std::log(parent.simulationCount+1) / (edge.node.simulationCount+1));
+            std::sqrt(std::log(parent.simulationCount+1) / (edge.node->simulationCount+1));
 
     return qualityValue + explorationValue;
 }
@@ -829,7 +824,7 @@ std::vector<EdgeInfo> getEdgesForLayer(const search::BattleScumSearcher2 &s, int
         BattleContext bc(*curStack.back().bc);
         action.execute(bc);
 
-        curStack.push_back( {&curStack.back().node->edges[nextIdx++].node, new BattleContext(bc), 0} );
+        curStack.push_back( {curStack.back().node->edges[nextIdx++].node.get(), new BattleContext(bc), 0} );
     }
 
     return layerEdges;
@@ -851,7 +846,7 @@ void search::BattleScumSearcher2::printSearchTree(std::ostream &os, int levels) 
 
     for (int depth = 0; depth < levels; ++depth) {
         for (const auto &x : layerEdges[depth]) {
-            os << "(" << x.first.node.simulationCount << ")";
+            os << "(" << x.first.node->simulationCount << ")";
             x.first.action.printDesc(os, *x.second) << "\t";
         }
         std::cout << '\n';
