@@ -279,7 +279,9 @@ std::uint64_t search::BattleScumSearcher2::buildStateKey(const BattleContext &bc
 bool search::BattleScumSearcher2::shouldDedupState(const BattleContext &bc) const {
     return bc.actionQueue.size == 0
            && bc.cardQueue.size == 0
-           && (bc.inputState == InputState::PLAYER_NORMAL || bc.inputState == InputState::CARD_SELECT);
+           // CARD_SELECT states are index-sensitive and can vary by transient selection context.
+           // Restrict transposition merges to normal player states to avoid cross-state edge reuse.
+           && bc.inputState == InputState::PLAYER_NORMAL;
 }
 
 void search::BattleScumSearcher2::pruneDuplicateEdges(search::BattleScumSearcher2::Node &node, const BattleContext &bc) {
