@@ -197,6 +197,8 @@ void search::BattleScumSearcher2::step() {
             return;
         }
 
+        pruneInvalidEdgesForState(curNode, curState);
+
         const bool isLeaf = curNode.edges.empty();
         if (isLeaf) {
 
@@ -236,6 +238,23 @@ void search::BattleScumSearcher2::step() {
             searchStack.push_back(edgeTaken.node.get());
         }
     }
+}
+
+void search::BattleScumSearcher2::pruneInvalidEdgesForState(search::BattleScumSearcher2::Node &node,
+                                                            const BattleContext &bc) {
+    if (node.edges.empty()) {
+        return;
+    }
+
+    std::vector<Edge> validEdges;
+    validEdges.reserve(node.edges.size());
+    for (auto &edge : node.edges) {
+        if (edge.action.isValidAction(bc)) {
+            validEdges.push_back(std::move(edge));
+        }
+    }
+
+    node.edges = std::move(validEdges);
 }
 
 std::uint64_t search::BattleScumSearcher2::buildStateKey(const BattleContext &bc) const {

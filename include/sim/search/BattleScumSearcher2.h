@@ -95,6 +95,7 @@ namespace sts::search {
         [[nodiscard]] std::uint64_t buildStateKey(const BattleContext &bc) const;
         [[nodiscard]] bool shouldDedupState(const BattleContext &bc) const;
         void pruneDuplicateEdges(Node &node, const BattleContext &bc);
+        static void pruneInvalidEdgesForState(Node &node, const BattleContext &bc);
         static double evaluateEndState(const BattleContext &rootBc, const BattleContext &bc);
 
         void printSearchTree(std::ostream &os, int levels);
