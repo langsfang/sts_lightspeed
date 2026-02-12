@@ -83,17 +83,9 @@ namespace {
     }
 
     template <typename Iterator>
-    void hashCardGroupSorted(std::uint64_t &seed, Iterator begin, Iterator end) {
-        std::vector<CardKey> cards;
+    void hashCardGroupInOrder(std::uint64_t &seed, Iterator begin, Iterator end) {
         for (auto it = begin; it != end; ++it) {
-            cards.push_back(toCardKey(*it));
-        }
-        std::sort(cards.begin(), cards.end(), [](const auto &a, const auto &b) {
-            return std::tie(a.id, a.upgradeCount, a.specialData, a.cost, a.costForTurn, a.freeToPlayOnce, a.retain) <
-                   std::tie(b.id, b.upgradeCount, b.specialData, b.cost, b.costForTurn, b.freeToPlayOnce, b.retain);
-        });
-        for (const auto &card : cards) {
-            hashCardKey(seed, card);
+            hashCardKey(seed, toCardKey(*it));
         }
     }
 
@@ -266,12 +258,12 @@ std::uint64_t search::BattleScumSearcher2::buildStateKey(const BattleContext &bc
     hashCombine(seed, static_cast<std::uint64_t>(bc.cards.drawPileBloodCardCount));
     hashCombine(seed, static_cast<std::uint64_t>(bc.cards.discardPileBloodCardCount));
 
-    hashCardGroupSorted(seed, bc.cards.hand.begin(), bc.cards.hand.begin() + bc.cards.cardsInHand);
-    hashCardGroupSorted(seed, bc.cards.drawPile.begin(), bc.cards.drawPile.end());
-    hashCardGroupSorted(seed, bc.cards.discardPile.begin(), bc.cards.discardPile.end());
-    hashCardGroupSorted(seed, bc.cards.exhaustPile.begin(), bc.cards.exhaustPile.end());
-    hashCardGroupSorted(seed, bc.cards.limbo.begin(), bc.cards.limbo.end());
-    hashCardGroupSorted(seed, bc.cards.stasisCards.begin(), bc.cards.stasisCards.end());
+    hashCardGroupInOrder(seed, bc.cards.hand.begin(), bc.cards.hand.begin() + bc.cards.cardsInHand);
+    hashCardGroupInOrder(seed, bc.cards.drawPile.begin(), bc.cards.drawPile.end());
+    hashCardGroupInOrder(seed, bc.cards.discardPile.begin(), bc.cards.discardPile.end());
+    hashCardGroupInOrder(seed, bc.cards.exhaustPile.begin(), bc.cards.exhaustPile.end());
+    hashCardGroupInOrder(seed, bc.cards.limbo.begin(), bc.cards.limbo.end());
+    hashCardGroupInOrder(seed, bc.cards.stasisCards.begin(), bc.cards.stasisCards.end());
 
     std::ostringstream os;
     os << bc.monsters;
