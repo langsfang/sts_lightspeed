@@ -82,6 +82,49 @@ namespace {
         hashCombine(seed, rng.seed1);
     }
 
+    void hashMonsterState(std::uint64_t &seed, const Monster &m) {
+        hashCombine(seed, static_cast<std::uint64_t>(m.idx));
+        hashCombine(seed, static_cast<std::uint64_t>(m.id));
+        hashCombine(seed, static_cast<std::uint64_t>(m.curHp));
+        hashCombine(seed, static_cast<std::uint64_t>(m.maxHp));
+        hashCombine(seed, static_cast<std::uint64_t>(m.block));
+
+        hashCombine(seed, static_cast<std::uint64_t>(m.isEscapingB));
+        hashCombine(seed, static_cast<std::uint64_t>(m.halfDead));
+        hashCombine(seed, static_cast<std::uint64_t>(m.escapeNext));
+        hashCombine(seed, static_cast<std::uint64_t>(m.moveHistory[0]));
+        hashCombine(seed, static_cast<std::uint64_t>(m.moveHistory[1]));
+
+        hashCombine(seed, m.statusBits);
+        hashCombine(seed, static_cast<std::uint64_t>(m.artifact));
+        hashCombine(seed, static_cast<std::uint64_t>(m.blockReturn));
+        hashCombine(seed, static_cast<std::uint64_t>(m.choked));
+        hashCombine(seed, static_cast<std::uint64_t>(m.corpseExplosion));
+        hashCombine(seed, static_cast<std::uint64_t>(m.lockOn));
+        hashCombine(seed, static_cast<std::uint64_t>(m.mark));
+        hashCombine(seed, static_cast<std::uint64_t>(m.metallicize));
+        hashCombine(seed, static_cast<std::uint64_t>(m.platedArmor));
+        hashCombine(seed, static_cast<std::uint64_t>(m.poison));
+        hashCombine(seed, static_cast<std::uint64_t>(m.regen));
+        hashCombine(seed, static_cast<std::uint64_t>(m.shackled));
+        hashCombine(seed, static_cast<std::uint64_t>(m.strength));
+        hashCombine(seed, static_cast<std::uint64_t>(m.vulnerable));
+        hashCombine(seed, static_cast<std::uint64_t>(m.weak));
+        hashCombine(seed, static_cast<std::uint64_t>(m.uniquePower0));
+        hashCombine(seed, static_cast<std::uint64_t>(m.uniquePower1));
+        hashCombine(seed, static_cast<std::uint64_t>(m.miscInfo));
+    }
+
+    void hashMonsterGroupState(std::uint64_t &seed, const MonsterGroup &g) {
+        hashCombine(seed, static_cast<std::uint64_t>(g.monsterCount));
+        hashCombine(seed, static_cast<std::uint64_t>(g.monstersAlive));
+        hashCombine(seed, static_cast<std::uint64_t>(g.extraRollMoveOnTurn.to_ullong()));
+
+        for (int i = 0; i < g.monsterCount; ++i) {
+            hashMonsterState(seed, g.arr[i]);
+        }
+    }
+
     template <typename Iterator>
     void hashCardGroupInOrder(std::uint64_t &seed, Iterator begin, Iterator end) {
         for (auto it = begin; it != end; ++it) {
@@ -265,11 +308,9 @@ std::uint64_t search::BattleScumSearcher2::buildStateKey(const BattleContext &bc
     hashCardGroupInOrder(seed, bc.cards.limbo.begin(), bc.cards.limbo.end());
     hashCardGroupInOrder(seed, bc.cards.stasisCards.begin(), bc.cards.stasisCards.end());
 
+    hashMonsterGroupState(seed, bc.monsters);
+
     std::ostringstream os;
-    os << bc.monsters;
-    hashCombine(seed, std::hash<std::string>{}(os.str()));
-    os.str("");
-    os.clear();
     os << bc.player;
     hashCombine(seed, std::hash<std::string>{}(os.str()));
 
