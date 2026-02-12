@@ -82,18 +82,53 @@ namespace {
         hashCombine(seed, rng.seed1);
     }
 
-    template <typename Iterator>
-    void hashCardGroupSorted(std::uint64_t &seed, Iterator begin, Iterator end) {
-        std::vector<CardKey> cards;
-        for (auto it = begin; it != end; ++it) {
-            cards.push_back(toCardKey(*it));
+    void hashMonsterState(std::uint64_t &seed, const Monster &m) {
+        hashCombine(seed, static_cast<std::uint64_t>(m.idx));
+        hashCombine(seed, static_cast<std::uint64_t>(m.id));
+        hashCombine(seed, static_cast<std::uint64_t>(m.curHp));
+        hashCombine(seed, static_cast<std::uint64_t>(m.maxHp));
+        hashCombine(seed, static_cast<std::uint64_t>(m.block));
+
+        hashCombine(seed, static_cast<std::uint64_t>(m.isEscapingB));
+        hashCombine(seed, static_cast<std::uint64_t>(m.halfDead));
+        hashCombine(seed, static_cast<std::uint64_t>(m.escapeNext));
+        hashCombine(seed, static_cast<std::uint64_t>(m.moveHistory[0]));
+        hashCombine(seed, static_cast<std::uint64_t>(m.moveHistory[1]));
+
+        hashCombine(seed, m.statusBits);
+        hashCombine(seed, static_cast<std::uint64_t>(m.artifact));
+        hashCombine(seed, static_cast<std::uint64_t>(m.blockReturn));
+        hashCombine(seed, static_cast<std::uint64_t>(m.choked));
+        hashCombine(seed, static_cast<std::uint64_t>(m.corpseExplosion));
+        hashCombine(seed, static_cast<std::uint64_t>(m.lockOn));
+        hashCombine(seed, static_cast<std::uint64_t>(m.mark));
+        hashCombine(seed, static_cast<std::uint64_t>(m.metallicize));
+        hashCombine(seed, static_cast<std::uint64_t>(m.platedArmor));
+        hashCombine(seed, static_cast<std::uint64_t>(m.poison));
+        hashCombine(seed, static_cast<std::uint64_t>(m.regen));
+        hashCombine(seed, static_cast<std::uint64_t>(m.shackled));
+        hashCombine(seed, static_cast<std::uint64_t>(m.strength));
+        hashCombine(seed, static_cast<std::uint64_t>(m.vulnerable));
+        hashCombine(seed, static_cast<std::uint64_t>(m.weak));
+        hashCombine(seed, static_cast<std::uint64_t>(m.uniquePower0));
+        hashCombine(seed, static_cast<std::uint64_t>(m.uniquePower1));
+        hashCombine(seed, static_cast<std::uint64_t>(m.miscInfo));
+    }
+
+    void hashMonsterGroupState(std::uint64_t &seed, const MonsterGroup &g) {
+        hashCombine(seed, static_cast<std::uint64_t>(g.monsterCount));
+        hashCombine(seed, static_cast<std::uint64_t>(g.monstersAlive));
+        hashCombine(seed, static_cast<std::uint64_t>(g.extraRollMoveOnTurn.to_ullong()));
+
+        for (int i = 0; i < g.monsterCount; ++i) {
+            hashMonsterState(seed, g.arr[i]);
         }
-        std::sort(cards.begin(), cards.end(), [](const auto &a, const auto &b) {
-            return std::tie(a.id, a.upgradeCount, a.specialData, a.cost, a.costForTurn, a.freeToPlayOnce, a.retain) <
-                   std::tie(b.id, b.upgradeCount, b.specialData, b.cost, b.costForTurn, b.freeToPlayOnce, b.retain);
-        });
-        for (const auto &card : cards) {
-            hashCardKey(seed, card);
+    }
+
+    template <typename Iterator>
+    void hashCardGroupInOrder(std::uint64_t &seed, Iterator begin, Iterator end) {
+        for (auto it = begin; it != end; ++it) {
+            hashCardKey(seed, toCardKey(*it));
         }
     }
 
@@ -115,7 +150,7 @@ namespace {
 
 search::BattleScumSearcher2::BattleScumSearcher2(const BattleContext &bc, search::EvalFnc _evalFnc)
     : rootState(new BattleContext(bc)), evalFnc(std::move(_evalFnc)), randGen(bc.seed+bc.floorNum) {
-    visitedStateKeys.insert(buildStateKey(*rootState));
+    transpositionTable.emplace(buildStateKey(*rootState), std::shared_ptr<Node>(&root, [] (Node*) {}));
 }
 
 void search::BattleScumSearcher2::search(int64_t simulations, long maxTimeMillis) {
@@ -162,6 +197,8 @@ void search::BattleScumSearcher2::step() {
             return;
         }
 
+        pruneInvalidEdgesForState(curNode, curState);
+
         const bool isLeaf = curNode.edges.empty();
         if (isLeaf) {
 
@@ -178,11 +215,11 @@ void search::BattleScumSearcher2::step() {
 
             const BattleContext prevState(curState);
             edgeTaken.action.execute(curState);
-            edgeTaken.node.nodeType = transitionHasRandomEvent(prevState, curState)
-                                     ? NodeType::CHANCE
-                                     : NodeType::DECISION;
+            edgeTaken.node->nodeType = transitionHasRandomEvent(prevState, curState)
+                                      ? NodeType::CHANCE
+                                      : NodeType::DECISION;
             actionStack.push_back(edgeTaken.action);
-            searchStack.push_back(&edgeTaken.node);
+            searchStack.push_back(edgeTaken.node.get());
 
             playoutRandom(curState, actionStack);
             updateFromPlayout(searchStack, actionStack, curState);
@@ -194,13 +231,30 @@ void search::BattleScumSearcher2::step() {
 
             const BattleContext prevState(curState);
             edgeTaken.action.execute(curState);
-            edgeTaken.node.nodeType = transitionHasRandomEvent(prevState, curState)
-                                     ? NodeType::CHANCE
-                                     : NodeType::DECISION;
+            edgeTaken.node->nodeType = transitionHasRandomEvent(prevState, curState)
+                                      ? NodeType::CHANCE
+                                      : NodeType::DECISION;
             actionStack.push_back(edgeTaken.action);
-            searchStack.push_back(&edgeTaken.node);
+            searchStack.push_back(edgeTaken.node.get());
         }
     }
+}
+
+void search::BattleScumSearcher2::pruneInvalidEdgesForState(search::BattleScumSearcher2::Node &node,
+                                                            const BattleContext &bc) {
+    if (node.edges.empty()) {
+        return;
+    }
+
+    std::vector<Edge> validEdges;
+    validEdges.reserve(node.edges.size());
+    for (auto &edge : node.edges) {
+        if (edge.action.isValidAction(bc)) {
+            validEdges.push_back(std::move(edge));
+        }
+    }
+
+    node.edges = std::move(validEdges);
 }
 
 std::uint64_t search::BattleScumSearcher2::buildStateKey(const BattleContext &bc) const {
@@ -266,18 +320,16 @@ std::uint64_t search::BattleScumSearcher2::buildStateKey(const BattleContext &bc
     hashCombine(seed, static_cast<std::uint64_t>(bc.cards.drawPileBloodCardCount));
     hashCombine(seed, static_cast<std::uint64_t>(bc.cards.discardPileBloodCardCount));
 
-    hashCardGroupSorted(seed, bc.cards.hand.begin(), bc.cards.hand.begin() + bc.cards.cardsInHand);
-    hashCardGroupSorted(seed, bc.cards.drawPile.begin(), bc.cards.drawPile.end());
-    hashCardGroupSorted(seed, bc.cards.discardPile.begin(), bc.cards.discardPile.end());
-    hashCardGroupSorted(seed, bc.cards.exhaustPile.begin(), bc.cards.exhaustPile.end());
-    hashCardGroupSorted(seed, bc.cards.limbo.begin(), bc.cards.limbo.end());
-    hashCardGroupSorted(seed, bc.cards.stasisCards.begin(), bc.cards.stasisCards.end());
+    hashCardGroupInOrder(seed, bc.cards.hand.begin(), bc.cards.hand.begin() + bc.cards.cardsInHand);
+    hashCardGroupInOrder(seed, bc.cards.drawPile.begin(), bc.cards.drawPile.end());
+    hashCardGroupInOrder(seed, bc.cards.discardPile.begin(), bc.cards.discardPile.end());
+    hashCardGroupInOrder(seed, bc.cards.exhaustPile.begin(), bc.cards.exhaustPile.end());
+    hashCardGroupInOrder(seed, bc.cards.limbo.begin(), bc.cards.limbo.end());
+    hashCardGroupInOrder(seed, bc.cards.stasisCards.begin(), bc.cards.stasisCards.end());
+
+    hashMonsterGroupState(seed, bc.monsters);
 
     std::ostringstream os;
-    os << bc.monsters;
-    hashCombine(seed, std::hash<std::string>{}(os.str()));
-    os.str("");
-    os.clear();
     os << bc.player;
     hashCombine(seed, std::hash<std::string>{}(os.str()));
 
@@ -287,7 +339,9 @@ std::uint64_t search::BattleScumSearcher2::buildStateKey(const BattleContext &bc
 bool search::BattleScumSearcher2::shouldDedupState(const BattleContext &bc) const {
     return bc.actionQueue.size == 0
            && bc.cardQueue.size == 0
-           && (bc.inputState == InputState::PLAYER_NORMAL || bc.inputState == InputState::CARD_SELECT);
+           // CARD_SELECT states are index-sensitive and can vary by transient selection context.
+           // Restrict transposition merges to normal player states to avoid cross-state edge reuse.
+           && bc.inputState == InputState::PLAYER_NORMAL;
 }
 
 void search::BattleScumSearcher2::pruneDuplicateEdges(search::BattleScumSearcher2::Node &node, const BattleContext &bc) {
@@ -295,25 +349,20 @@ void search::BattleScumSearcher2::pruneDuplicateEdges(search::BattleScumSearcher
         return;
     }
 
-    std::vector<Edge> uniqueEdges;
-    uniqueEdges.reserve(node.edges.size());
-
     for (auto &edge : node.edges) {
         BattleContext nextState(bc);
         edge.action.execute(nextState);
 
         if (!shouldDedupState(nextState)) {
-            uniqueEdges.push_back(std::move(edge));
             continue;
         }
 
         const auto key = buildStateKey(nextState);
-        if (visitedStateKeys.insert(key).second) {
-            uniqueEdges.push_back(std::move(edge));
+        const auto [it, inserted] = transpositionTable.emplace(key, edge.node);
+        if (!inserted) {
+            edge.node = it->second;
         }
     }
-
-    node.edges = std::move(uniqueEdges);
 }
 
 void search::BattleScumSearcher2::updateFromPlayout(const std::vector<Node *> &stack, const std::vector<Action> &actionStack, const BattleContext &endState) {
@@ -363,14 +412,14 @@ double search::BattleScumSearcher2::evaluateEdge(const search::BattleScumSearche
 
     // unexplored nodes must be assigned a sufficiently large value
     // that they are explored at a priority over any other node
-    if (edge.node.simulationCount == 0) {
+    if (edge.node->simulationCount == 0) {
         return unexploredNodeValueParameter;
     }
 
-    double qualityValue = edge.node.evaluationSum / (edge.node.simulationCount+1);
+    double qualityValue = edge.node->evaluationSum / (edge.node->simulationCount+1);
 
     double explorationValue = explorationParameter *
-            std::sqrt(std::log(parent.simulationCount+1) / (edge.node.simulationCount+1));
+            std::sqrt(std::log(parent.simulationCount+1) / (edge.node->simulationCount+1));
 
     return qualityValue + explorationValue;
 }
@@ -829,7 +878,7 @@ std::vector<EdgeInfo> getEdgesForLayer(const search::BattleScumSearcher2 &s, int
         BattleContext bc(*curStack.back().bc);
         action.execute(bc);
 
-        curStack.push_back( {&curStack.back().node->edges[nextIdx++].node, new BattleContext(bc), 0} );
+        curStack.push_back( {curStack.back().node->edges[nextIdx++].node.get(), new BattleContext(bc), 0} );
     }
 
     return layerEdges;
@@ -851,7 +900,7 @@ void search::BattleScumSearcher2::printSearchTree(std::ostream &os, int levels) 
 
     for (int depth = 0; depth < levels; ++depth) {
         for (const auto &x : layerEdges[depth]) {
-            os << "(" << x.first.node.simulationCount << ")";
+            os << "(" << x.first.node->simulationCount << ")";
             x.first.action.printDesc(os, *x.second) << "\t";
         }
         std::cout << '\n';

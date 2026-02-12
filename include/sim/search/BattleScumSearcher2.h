@@ -14,7 +14,7 @@
 #include <iostream>
 #include <limits>
 #include <cstdint>
-#include <unordered_set>
+#include <unordered_map>
 
 namespace sts::search {
 
@@ -44,7 +44,7 @@ namespace sts::search {
 
         struct Edge {
             Action action;
-            Node node;
+            std::shared_ptr<Node> node = std::make_shared<Node>();
         };
 
         std::unique_ptr<const BattleContext> rootState;
@@ -68,7 +68,7 @@ namespace sts::search {
 
         std::vector<Node*> searchStack;
         std::vector<Action> actionStack;
-        std::unordered_set<std::uint64_t> visitedStateKeys;
+        std::unordered_map<std::uint64_t, std::shared_ptr<Node>> transpositionTable;
 
         explicit BattleScumSearcher2(const BattleContext &bc, EvalFnc evalFnc=&evaluateEndState);
 
@@ -95,6 +95,7 @@ namespace sts::search {
         [[nodiscard]] std::uint64_t buildStateKey(const BattleContext &bc) const;
         [[nodiscard]] bool shouldDedupState(const BattleContext &bc) const;
         void pruneDuplicateEdges(Node &node, const BattleContext &bc);
+        static void pruneInvalidEdgesForState(Node &node, const BattleContext &bc);
         static double evaluateEndState(const BattleContext &rootBc, const BattleContext &bc);
 
         void printSearchTree(std::ostream &os, int levels);
