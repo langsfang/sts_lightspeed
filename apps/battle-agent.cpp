@@ -137,8 +137,8 @@ int pickBestActionIndex(const std::vector<search::BattleScumSearcher2 *> &search
         double evaluationSum = 0;
         int simulationCount = 0;
         for (const auto *searcher : searchers) {
-            evaluationSum += searcher->root.edges[j].node.evaluationSum;
-            simulationCount += searcher->root.edges[j].node.simulationCount;
+            evaluationSum += searcher->root.edges[j].node->evaluationSum;
+            simulationCount += searcher->root.edges[j].node->simulationCount;
         }
 
         if (simulationCount == 0) {

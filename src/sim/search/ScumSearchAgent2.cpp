@@ -119,8 +119,8 @@ void search::ScumSearchAgent2::stepThroughSearchTree(BattleContext &bc, const se
         const sts::search::BattleScumSearcher2::Edge *maxEdge = nullptr;
 
         for (const auto &edge : curNode->edges) {
-            if (edge.node.simulationCount > maxSimulations) {
-                maxSimulations = edge.node.simulationCount;
+            if (edge.node->simulationCount > maxSimulations) {
+                maxSimulations = edge.node->simulationCount;
                 maxEdge = &edge;
             }
         }
@@ -134,7 +134,7 @@ void search::ScumSearchAgent2::stepThroughSearchTree(BattleContext &bc, const se
         }
 
         takeAction(bc, maxEdge->action);
-        curNode = &maxEdge->node;
+        curNode = &*maxEdge->node;
     }
 }
 

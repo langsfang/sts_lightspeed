@@ -381,7 +381,7 @@ void search::BattleScumSearcher2::updateFromPlayout(const std::vector<Node *> &s
     double backedUpValue = evaluation;
     for (auto it = stack.rbegin(); it != stack.rend(); ++it) {
         auto &node = *(*it);
-        if (node.nodeType == NodeType::CHANCE) {
+        if (node.nodeType == NodeType::CHANCE && backedUpValue > 0) {
             backedUpValue *= chanceNodeBackpropWeight;
         }
         ++node.simulationCount;
@@ -828,6 +828,7 @@ double search::BattleScumSearcher2::evaluateEndState(const BattleContext &rootBc
         return 1.*bc.player.curHp / rootBc.player.curHp; 
         // return bc.player.curHp / 100.0f; 
     } else {
+        return -1;
         double curHpTotal = getNonMinionMonsterCurHpTotal(bc);
         double maxHpTotal = getNonMinionMonsterMaxHpTotal(rootBc);
         double hpRatio = 0.0;

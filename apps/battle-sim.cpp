@@ -99,30 +99,32 @@ std::string describeAction(const search::Action &action, const BattleContext &bc
         case search::ActionType::SINGLE_CARD_SELECT: {
             const auto task = bc.cardSelectInfo.cardSelectTask;
             const auto idx = action.getSelectIdx();
-            os << "{ " << cardSelectTaskStrings[static_cast<int>(task)] << " (" << idx << ")";
+            os << "choose";
+            // os << "{ " << cardSelectTaskStrings[static_cast<int>(task)] << " (" << idx << ")";
             const auto name = selectedCardNameForTask(bc, task, idx);
             if (!name.empty()) {
-                os << " " << name;
+                os << " (" << name << ")";
             }
-            os << " }";
+            // os << " }";
             return os.str();
         }
         case search::ActionType::MULTI_CARD_SELECT: {
             const auto task = bc.cardSelectInfo.cardSelectTask;
             const auto selected = action.getSelectedIdxs();
-            os << "{ " << cardSelectTaskStrings[static_cast<int>(task)];
+            os << "choose";
+            // os << "{ " << cardSelectTaskStrings[static_cast<int>(task)];
             if (selected.empty()) {
                 os << " none";
             } else {
                 for (int i = 0; i < selected.size(); ++i) {
                     const auto idx = selected[i];
-                    os << " (" << idx << ") " << bc.cards.hand[idx].getName();
+                    os << " (" <<bc.cards.hand[idx].getName()<< ")";
                     if (i + 1 < selected.size()) {
                         os << ",";
                     }
                 }
             }
-            os << " }";
+            // os << " }";
             return os.str();
         }
         case search::ActionType::END_TURN: {
@@ -195,8 +197,8 @@ int main(int argc, char *argv[]) {
         double evaluationSum = 0;
         int simulationCount = 0;
         for (int i = 0; i < thread_count; ++i) {
-            evaluationSum += searchers[i]->root.edges[j].node.evaluationSum;
-            simulationCount += searchers[i]->root.edges[j].node.simulationCount;
+            evaluationSum += searchers[i]->root.edges[j].node->evaluationSum;
+            simulationCount += searchers[i]->root.edges[j].node->simulationCount;
         }
         double score = evaluationSum/(1.0*simulationCount);
         outfile <<j <<":"<< simulationCount << " visits / " << std::fixed << std::setprecision(5) << score << " value for ";
@@ -223,6 +225,33 @@ int main(int argc, char *argv[]) {
 
     // search the next action if it's card selection
     // TODO
+    if(baseBc.inputState == InputState::CARD_SELECT) {
+      int best2ndActionIdx = 0;
+      float bestScore = -1.;
+      outfile <<"\n---select--\n";
+      for (int j = 0; j < searchers[0]->root.edges[bestActionIdx].node->edges.size(); ++j) {
+          double evaluationSum = 0;
+          int simulationCount = 0;
+          for (int i = 0; i < thread_count; ++i) {
+              evaluationSum += searchers[i]->root.edges[bestActionIdx].node->edges[j].node->evaluationSum;
+              simulationCount += searchers[i]->root.edges[bestActionIdx].node->edges[j].node->simulationCount;
+          }
+          double score = evaluationSum/(1.0*simulationCount);
+          outfile <<j <<":"<< simulationCount << " visits / " << std::fixed << std::setprecision(5) << score << " value for ";
+          if(bestScore < score) {
+              best2ndActionIdx = j;
+              bestScore = score;
+          }
+
+          searchers[0]->root.edges[bestActionIdx].node->edges[j].action.printDesc(outfile, baseBc);
+          outfile << std::endl;
+      }
+
+      action = searchers[0]->root.edges[bestActionIdx].node->edges[best2ndActionIdx].action;
+      outfile <<"choose:\t"<<best2ndActionIdx<<"\n";
+      action.printDesc(outfile, baseBc);
+      actionDescriptions.push_back(describeAction(action, baseBc, monsterIdxMap));
+    }
 
     nlohmann::json output = nlohmann::json::object();
     output["monsterIdxMap"] = monsterIdxMapJson;
