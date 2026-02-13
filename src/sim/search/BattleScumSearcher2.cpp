@@ -17,6 +17,7 @@ using namespace sts;
 std::int64_t simulationIdx = 0; // for debugging
 
 double getNonMinionMonsterCurHpTotal(const BattleContext &bc);
+double getMonsterHpScale(const Monster &m);
 
 namespace sts::search {
     thread_local search::BattleScumSearcher2 *g_debug_scum_search;
@@ -221,8 +222,6 @@ namespace {
                + (enemyDebuffDelta * weights.enemyDebuff);
     }
 }
-
-
 
 search::BattleScumSearcher2::BattleScumSearcher2(const BattleContext &bc, search::EvalFnc _evalFnc)
     : rootState(new BattleContext(bc)), evalFnc(std::move(_evalFnc)), randGen(bc.seed+bc.floorNum) {
@@ -532,7 +531,7 @@ int search::BattleScumSearcher2::selectFirstActionForLeafNode(const search::Batt
             bestScore = score;
             bestIdxs.clear();
             bestIdxs.push_back(i);
-        } else if (score == bestScore) {
+        } else if (abs(score-bestScore)<0.01) {
             bestIdxs.push_back(i);
         }
     }
@@ -891,7 +890,7 @@ double search::BattleScumSearcher2::evaluateEndState(const BattleContext &rootBc
         return 1.*bc.player.curHp / rootBc.player.curHp; 
         // return bc.player.curHp / 100.0f; 
     } else {
-        return -1;
+        return -1.;
         double curHpTotal = getNonMinionMonsterCurHpTotal(bc);
         double maxHpTotal = getNonMinionMonsterMaxHpTotal(rootBc);
         double hpRatio = 0.0;
