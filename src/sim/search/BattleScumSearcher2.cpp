@@ -155,10 +155,24 @@ namespace {
         return score;
     }
 
+    double getNonMinionMonsterBlockTotal(const BattleContext &bc) {
+        int blockTotal = 0;
+
+        for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+            const auto &m = bc.monsters.arr[i];
+            if (!m.hasStatus<MS::MINION>() && m.id != sts::MonsterId::INVALID) {
+                blockTotal += m.block * getMonsterHpScale(m);
+            }
+        }
+
+        return blockTotal;
+    }
+
     struct HeuristicWeights {
         double hp = 5.0;
         double block = 0.5;
         double enemyHp = 1.0;
+        double enemyBlock = 0.4;
         double scaling = 0.65;
         double enemyDebuff = 0.5;
     };
@@ -166,16 +180,16 @@ namespace {
     HeuristicWeights getHeuristicWeightsForIntent(search::SearchIntent intent) {
         switch (intent) {
             case search::SearchIntent::AGGRESSIVE:
-                return {5.0, 0.2, 2.4, 0.35, 0.35};
+                return {5.0, 0.2, 2.4, 0.7, 0.35, 0.35};
 
             case search::SearchIntent::SCALING_FIRST:
-                return {5.0, 0.4, 0.7, 2.1, 1.15};
+                return {5.0, 0.4, 0.7, 0.25, 2.1, 1.15};
 
             case search::SearchIntent::SURVIVAL_FIRST:
-                return {6.5, 1.2, 0.8, 0.5, 0.6};
+                return {6.5, 1.2, 0.8, 0.3, 0.5, 0.6};
 
             default:
-                return {6.5, 1.2, 0.8, 0.5, 0.6};
+                return {6.5, 1.2, 0.8, 0.3, 0.5, 0.6};
         }
     }
 
@@ -189,6 +203,8 @@ namespace {
         const double blockDelta = static_cast<double>(after.player.block - before.player.block);
         const double enemyHpDelta = static_cast<double>(getNonMinionMonsterCurHpTotal(before)
                                                       - getNonMinionMonsterCurHpTotal(after));
+        const double enemyBlockDelta = static_cast<double>(getNonMinionMonsterBlockTotal(before)
+                                                         - getNonMinionMonsterBlockTotal(after));
         const double scalingDelta = getPlayerScalingDeltaScore(before, after);
         const double enemyDebuffDelta = getEnemyDebuffDeltaScore(before, after);
 
@@ -197,6 +213,7 @@ namespace {
         return (hpDelta * weights.hp)
                + (blockDelta * weights.block)
                + (enemyHpDelta * weights.enemyHp)
+               + (enemyBlockDelta * weights.enemyBlock)
                + (scalingDelta * weights.scaling)
                + (enemyDebuffDelta * weights.enemyDebuff);
     }
