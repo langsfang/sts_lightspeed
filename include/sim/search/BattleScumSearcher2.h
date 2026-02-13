@@ -19,10 +19,9 @@
 namespace sts::search {
 
     enum class SearchIntent {
-        NONE,
-        PREFER_ATTACK,
-        PREFER_DEFENSE,
-        PREFER_ABILITY
+        SURVIVAL_FIRST,
+        AGGRESSIVE,
+        SCALING_FIRST,
     };
 
     typedef std::function<double (const BattleContext&, const BattleContext&)> EvalFnc;
@@ -61,7 +60,7 @@ namespace sts::search {
         int outcomePlayerHp = 0;
 
         bool allowPotions = false;
-        SearchIntent intent = SearchIntent::NONE;
+        SearchIntent intent = SearchIntent::SURVIVAL_FIRST;
 
         std::vector<Action> bestActionSequence;
         std::default_random_engine randGen;

@@ -132,17 +132,93 @@ namespace {
         }
     }
 
-    double evaluateActionHeuristic(const BattleContext &before, const search::Action &action) {
+    double getPlayerScalingDeltaScore(const BattleContext &before, const BattleContext &after) {
+        const auto &bp = before.player;
+        const auto &ap = after.player;
+        return static_cast<double>(ap.strength - bp.strength)
+               + static_cast<double>(ap.dexterity - bp.dexterity)
+               + static_cast<double>(ap.focus - bp.focus)
+               + (0.5 * static_cast<double>(ap.artifact - bp.artifact))
+               + (1.25 * static_cast<double>(ap.energyPerTurn - bp.energyPerTurn))
+               + (0.75 * static_cast<double>(ap.devaFormEnergyPerTurn - bp.devaFormEnergyPerTurn));
+    }
+
+    double getEnemyDebuffDeltaScore(const BattleContext &before, const BattleContext &after) {
+        double score = 0.0;
+        for (int i = 0; i < before.monsters.monsterCount; ++i) {
+            const auto &bm = before.monsters.arr[i];
+            const auto &am = after.monsters.arr[i];
+            score += 0.5 * static_cast<double>(am.vulnerable - bm.vulnerable);
+            score += 0.7 * static_cast<double>(am.weak - bm.weak);
+            score += 0.5 * static_cast<double>(bm.strength - am.strength);
+        }
+        return score;
+    }
+
+    double getNonMinionMonsterBlockTotal(const BattleContext &bc) {
+        int blockTotal = 0;
+
+        for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+            const auto &m = bc.monsters.arr[i];
+            if (!m.hasStatus<MS::MINION>() && m.id != sts::MonsterId::INVALID) {
+                blockTotal += m.block * getMonsterHpScale(m);
+            }
+        }
+
+        return blockTotal;
+    }
+
+    struct HeuristicWeights {
+        double hp = 5.0;
+        double block = 0.5;
+        double energy = 0.45;
+        double enemyHp = 1.0;
+        double enemyBlock = 0.4;
+        double scaling = 0.65;
+        double enemyDebuff = 0.5;
+    };
+
+    HeuristicWeights getHeuristicWeightsForIntent(search::SearchIntent intent) {
+        switch (intent) {
+            case search::SearchIntent::AGGRESSIVE:
+                return {5.0, 0.2, 0.25, 2.4, 0.7, 0.35, 0.35};
+
+            case search::SearchIntent::SCALING_FIRST:
+                return {5.0, 0.4, 0.6, 0.7, 0.25, 2.1, 1.15};
+
+            case search::SearchIntent::SURVIVAL_FIRST:
+                return {6.5, 1.2, 0.9, 0.8, 0.3, 0.5, 0.6};
+
+            default:
+                return {6.5, 1.2, 0.9, 0.8, 0.3, 0.5, 0.6};
+        }
+    }
+
+    double evaluateActionHeuristic(const BattleContext &before,
+                                   const search::Action &action,
+                                   search::SearchIntent intent) {
         BattleContext after(before);
         action.execute(after);
 
         const double hpDelta = static_cast<double>(after.player.curHp - before.player.curHp);
         const double blockDelta = static_cast<double>(after.player.block - before.player.block);
+        const double energyDelta = static_cast<double>(after.player.energy - before.player.energy);
         const double enemyHpDelta = static_cast<double>(getNonMinionMonsterCurHpTotal(before)
                                                       - getNonMinionMonsterCurHpTotal(after));
+        const double enemyBlockDelta = static_cast<double>(getNonMinionMonsterBlockTotal(before)
+                                                         - getNonMinionMonsterBlockTotal(after));
+        const double scalingDelta = getPlayerScalingDeltaScore(before, after);
+        const double enemyDebuffDelta = getEnemyDebuffDeltaScore(before, after);
 
-        // return (hpDelta * 5.0) + (blockDelta * 0.5) + enemyHpDelta;
-        return (hpDelta * 5.0) + (blockDelta * 0.5) + enemyHpDelta;
+        const auto weights = getHeuristicWeightsForIntent(intent);
+
+        return (hpDelta * weights.hp)
+               + (blockDelta * weights.block)
+               + (energyDelta * weights.energy)
+               + (enemyHpDelta * weights.enemyHp)
+               + (enemyBlockDelta * weights.enemyBlock)
+               + (scalingDelta * weights.scaling)
+               + (enemyDebuffDelta * weights.enemyDebuff);
     }
 }
 
@@ -451,7 +527,7 @@ int search::BattleScumSearcher2::selectFirstActionForLeafNode(const search::Batt
     std::vector<int> bestIdxs;
     double bestScore = std::numeric_limits<double>::lowest();
     for (int i = 0; i < leafNode.edges.size(); ++i) {
-        const auto score = evaluateActionHeuristic(state, leafNode.edges[i].action);
+        const auto score = evaluateActionHeuristic(state, leafNode.edges[i].action, intent);
         if (score > bestScore) {
             bestScore = score;
             bestIdxs.clear();
@@ -488,7 +564,7 @@ void search::BattleScumSearcher2::playoutRandom(BattleContext &state, std::vecto
             std::vector<int> bestIdxs;
             double bestScore = std::numeric_limits<double>::lowest();
             for (int i = 0; i < tempNode.edges.size(); ++i) {
-                const auto score = evaluateActionHeuristic(state, tempNode.edges[i].action);
+                const auto score = evaluateActionHeuristic(state, tempNode.edges[i].action, intent);
                 if (score > bestScore) {
                     bestScore = score;
                     bestIdxs.clear();
@@ -572,7 +648,6 @@ void search::BattleScumSearcher2::enumerateCardActions(search::BattleScumSearche
     struct CardOption {
         int handIdx;
         int playOrdering;
-        int intentPriority;
     };
 
     fixed_list<CardOption, 10> playableHandIdxs;
@@ -604,23 +679,11 @@ void search::BattleScumSearcher2::enumerateCardActions(search::BattleScumSearche
 
         if (isUniqueAction) {
             // this is being called a *lot* maybe swap it for a lookup table instead of a switch statement
-            int intentPriority = 0;
-            if (intent != SearchIntent::NONE) {
-                const auto cardType = c.getType();
-                const bool matchesIntent =
-                        (intent == SearchIntent::PREFER_ATTACK && cardType == CardType::ATTACK) ||
-                        (intent == SearchIntent::PREFER_DEFENSE && cardType == CardType::SKILL) ||
-                        (intent == SearchIntent::PREFER_ABILITY && cardType == CardType::POWER);
-                intentPriority = matchesIntent ? 0 : 1;
-            }
-            playableHandIdxs.push_back({handIdx, search::Expert::getPlayOrdering(c.getId()), intentPriority});
+            playableHandIdxs.push_back({handIdx, search::Expert::getPlayOrdering(c.getId())});
         }
     }
 
     std::sort(playableHandIdxs.begin(), playableHandIdxs.end(), [](const auto &a, const auto &b) {
-        if (a.intentPriority != b.intentPriority) {
-            return a.intentPriority < b.intentPriority;
-        }
         return a.playOrdering < b.playOrdering;
     });
 
