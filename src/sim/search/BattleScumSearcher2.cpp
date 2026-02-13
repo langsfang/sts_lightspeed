@@ -171,6 +171,7 @@ namespace {
     struct HeuristicWeights {
         double hp = 5.0;
         double block = 0.5;
+        double energy = 0.45;
         double enemyHp = 1.0;
         double enemyBlock = 0.4;
         double scaling = 0.65;
@@ -180,16 +181,16 @@ namespace {
     HeuristicWeights getHeuristicWeightsForIntent(search::SearchIntent intent) {
         switch (intent) {
             case search::SearchIntent::AGGRESSIVE:
-                return {5.0, 0.2, 2.4, 0.7, 0.35, 0.35};
+                return {5.0, 0.2, 0.25, 2.4, 0.7, 0.35, 0.35};
 
             case search::SearchIntent::SCALING_FIRST:
-                return {5.0, 0.4, 0.7, 0.25, 2.1, 1.15};
+                return {5.0, 0.4, 0.6, 0.7, 0.25, 2.1, 1.15};
 
             case search::SearchIntent::SURVIVAL_FIRST:
-                return {6.5, 1.2, 0.8, 0.3, 0.5, 0.6};
+                return {6.5, 1.2, 0.9, 0.8, 0.3, 0.5, 0.6};
 
             default:
-                return {6.5, 1.2, 0.8, 0.3, 0.5, 0.6};
+                return {6.5, 1.2, 0.9, 0.8, 0.3, 0.5, 0.6};
         }
     }
 
@@ -201,6 +202,7 @@ namespace {
 
         const double hpDelta = static_cast<double>(after.player.curHp - before.player.curHp);
         const double blockDelta = static_cast<double>(after.player.block - before.player.block);
+        const double energyDelta = static_cast<double>(after.player.energy - before.player.energy);
         const double enemyHpDelta = static_cast<double>(getNonMinionMonsterCurHpTotal(before)
                                                       - getNonMinionMonsterCurHpTotal(after));
         const double enemyBlockDelta = static_cast<double>(getNonMinionMonsterBlockTotal(before)
@@ -212,6 +214,7 @@ namespace {
 
         return (hpDelta * weights.hp)
                + (blockDelta * weights.block)
+               + (energyDelta * weights.energy)
                + (enemyHpDelta * weights.enemyHp)
                + (enemyBlockDelta * weights.enemyBlock)
                + (scalingDelta * weights.scaling)
