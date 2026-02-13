@@ -19,7 +19,7 @@
 namespace sts::search {
 
     enum class SearchIntent {
-        NONE,
+        SURVIVAL_FIRST,
         AGGRESSIVE,
         SCALING_FIRST,
     };
@@ -60,7 +60,7 @@ namespace sts::search {
         int outcomePlayerHp = 0;
 
         bool allowPotions = false;
-        SearchIntent intent = SearchIntent::NONE;
+        SearchIntent intent = SearchIntent::SURVIVAL_FIRST;
 
         std::vector<Action> bestActionSequence;
         std::default_random_engine randGen;

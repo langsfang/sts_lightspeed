@@ -35,7 +35,7 @@ namespace sts::search {
         int stepsNoSolution = 5;
         int stepsWithSolution = 15;
         bool allowPotions = true;
-        SearchIntent intent = SearchIntent::NONE;
+        SearchIntent intent = SearchIntent::SURVIVAL_FIRST;
 
         std::default_random_engine rng;
 

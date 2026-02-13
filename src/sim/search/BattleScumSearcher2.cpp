@@ -171,9 +171,11 @@ namespace {
             case search::SearchIntent::SCALING_FIRST:
                 return {5.0, 0.4, 0.7, 2.1, 1.15};
 
-            case search::SearchIntent::NONE:
+            case search::SearchIntent::SURVIVAL_FIRST:
+                return {6.5, 1.2, 0.8, 0.5, 0.6};
+
             default:
-                return {};
+                return {6.5, 1.2, 0.8, 0.5, 0.6};
         }
     }
 
