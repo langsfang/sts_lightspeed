@@ -155,24 +155,25 @@ namespace {
         return score;
     }
 
-    double getIntentTypeBias(const BattleContext &before,
-                             const search::Action &action,
-                             search::SearchIntent intent) {
-        if (intent == search::SearchIntent::NONE || action.getActionType() != search::ActionType::CARD) {
-            return 0.0;
-        }
+    struct HeuristicWeights {
+        double hp = 5.0;
+        double block = 0.5;
+        double enemyHp = 1.0;
+        double scaling = 0.65;
+        double enemyDebuff = 0.5;
+    };
 
-        const auto &card = before.cards.hand[action.getSourceIdx()];
-        const auto cardType = card.getType();
+    HeuristicWeights getHeuristicWeightsForIntent(search::SearchIntent intent) {
         switch (intent) {
-            case search::SearchIntent::PREFER_ATTACK:
-                return cardType == CardType::ATTACK ? 1.0 : -0.5;
-            case search::SearchIntent::PREFER_DEFENSE:
-                return cardType == CardType::SKILL ? 1.0 : -0.5;
-            case search::SearchIntent::PREFER_ABILITY:
-                return cardType == CardType::POWER ? 1.0 : -0.5;
+            case search::SearchIntent::AGGRESSIVE:
+                return {5.0, 0.2, 2.4, 0.35, 0.35};
+
+            case search::SearchIntent::SCALING_FIRST:
+                return {5.0, 0.4, 0.7, 2.1, 1.15};
+
+            case search::SearchIntent::NONE:
             default:
-                return 0.0;
+                return {};
         }
     }
 
@@ -188,35 +189,14 @@ namespace {
                                                       - getNonMinionMonsterCurHpTotal(after));
         const double scalingDelta = getPlayerScalingDeltaScore(before, after);
         const double enemyDebuffDelta = getEnemyDebuffDeltaScore(before, after);
-        const double intentTypeBias = getIntentTypeBias(before, action, intent);
 
-        double hpWeight = 5.0;
-        double blockWeight = 0.5;
-        double enemyHpWeight = 1.0;
-        double scalingWeight = 0.65;
-        double enemyDebuffWeight = 0.5;
-        double intentBiasWeight = 1.0;
+        const auto weights = getHeuristicWeightsForIntent(intent);
 
-        if (before.encounter == MonsterEncounter::GREMLIN_NOB) {
-            enemyHpWeight = 2.5;
-            blockWeight = 0.15;
-            scalingWeight = 0.4;
-            enemyDebuffWeight = 0.25;
-            intentBiasWeight = 1.5;
-        } else if (isBossEncounter(before.encounter)) {
-            enemyHpWeight = 0.6;
-            blockWeight = 0.35;
-            scalingWeight = 2.2;
-            enemyDebuffWeight = 1.3;
-            intentBiasWeight = 1.8;
-        }
-
-        return (hpDelta * hpWeight)
-               + (blockDelta * blockWeight)
-               + (enemyHpDelta * enemyHpWeight)
-               + (scalingDelta * scalingWeight)
-               + (enemyDebuffDelta * enemyDebuffWeight)
-               + (intentTypeBias * intentBiasWeight);
+        return (hpDelta * weights.hp)
+               + (blockDelta * weights.block)
+               + (enemyHpDelta * weights.enemyHp)
+               + (scalingDelta * weights.scaling)
+               + (enemyDebuffDelta * weights.enemyDebuff);
     }
 }
 

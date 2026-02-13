@@ -20,9 +20,8 @@ namespace sts::search {
 
     enum class SearchIntent {
         NONE,
-        PREFER_ATTACK,
-        PREFER_DEFENSE,
-        PREFER_ABILITY
+        AGGRESSIVE,
+        SCALING_FIRST,
     };
 
     typedef std::function<double (const BattleContext&, const BattleContext&)> EvalFnc;
