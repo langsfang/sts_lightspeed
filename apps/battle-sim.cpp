@@ -256,6 +256,7 @@ int main(int argc, char *argv[]) {
     nlohmann::json output = nlohmann::json::object();
     output["monsterIdxMap"] = monsterIdxMapJson;
     output["actions"] = actionDescriptions;
+    output["score"] = bestScore;
     std::cout << output.dump() << std::endl;
     return 0;
 }
