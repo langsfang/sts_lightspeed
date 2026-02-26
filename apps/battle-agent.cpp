@@ -4,6 +4,7 @@
 #include <sstream>
 #include <vector>
 #include <algorithm>
+#include <iomanip>
 
 #include "combat/BattleContext.h"
 #include "convert/BattleConverter.h"
@@ -15,7 +16,7 @@
 using namespace sts;
 
 void runSearch(search::BattleScumSearcher2 &searcher, int simulations) {
-    searcher.search(simulations, 10000);
+    searcher.search(simulations*10, 10000*10);
 }
 
 std::string selectedCardNameForTask(const BattleContext &bc, CardSelectTask task, int idx) {
@@ -124,7 +125,7 @@ std::string describeAction(const search::Action &action, const BattleContext &bc
     }
 }
 
-int pickBestActionIndex(const std::vector<search::BattleScumSearcher2 *> &searchers) {
+int pickBestActionIndex(const std::vector<search::BattleScumSearcher2 *> &searchers, const BattleContext &bc, std::ofstream &ofs) {
     int bestActionIdx = -1;
     double bestScore = -1e18;
 
@@ -150,6 +151,9 @@ int pickBestActionIndex(const std::vector<search::BattleScumSearcher2 *> &search
             bestActionIdx = j;
             bestScore = score;
         }
+        ofs <<j <<":"<< simulationCount << " visits / " << std::fixed << std::setprecision(5) << score << " value for ";
+        searchers[0]->root.edges[j].action.printDesc(ofs, bc);
+        ofs << std::endl;
     }
 
     return bestActionIdx;
@@ -191,12 +195,17 @@ int main(int argc, char *argv[]) {
 
     nlohmann::json actionDescriptions = nlohmann::json::array();
 
+    std::ofstream ofs;
+    ofs.open("agent.log", std::ios_base::app);
+    ofs << "=== begin battle ===\n";
+
     while (bc.outcome == Outcome::UNDECIDED) {
         std::vector<search::BattleScumSearcher2 *> searchers;
         std::vector<std::thread> threads;
         searchers.reserve(threadCount);
         threads.reserve(threadCount);
 
+        ofs << bc << std::endl;
         for (int i = 0; i < threadCount; ++i) {
             BattleContext threadBc = bc;
             const int rngMod = i * 1000;
@@ -215,7 +224,7 @@ int main(int argc, char *argv[]) {
             thread.join();
         }
 
-        const int bestActionIdx = pickBestActionIndex(searchers);
+        const int bestActionIdx = pickBestActionIndex(searchers, bc, ofs);
         if (bestActionIdx < 0 || bestActionIdx >= searchers[0]->root.edges.size()) {
             for (auto *searcher : searchers) {
                 delete searcher;
@@ -226,11 +235,13 @@ int main(int argc, char *argv[]) {
 
         auto action = searchers[0]->root.edges[bestActionIdx].action;
         actionDescriptions.push_back(describeAction(action, bc, monsterIdxMap));
+        action.printDesc(ofs, bc);
         action.execute(bc);
 
         for (auto *searcher : searchers) {
             delete searcher;
         }
+        ofs << "\n---\n";
     }
 
     nlohmann::json monsterIdxMapJson = nlohmann::json::array();
