@@ -172,6 +172,9 @@ BattleContext BattleConverter::convertFromJson(const nlohmann::json &json, int *
 
 
     bc.partialInitTwo(gc);
+    bc.player.relicBits0 = gc.relics.relicBits0;
+    bc.player.relicBits1 = gc.relics.relicBits1;
+    bc.player.relicBits2 = gc.relics.relicBits2;
     bc.player.energy = json["game_state"]["combat_state"]["player"]["energy"];
     bc.player.block = json["game_state"]["combat_state"]["player"]["block"];
 

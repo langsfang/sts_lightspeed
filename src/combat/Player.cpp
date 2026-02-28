@@ -66,10 +66,13 @@ void Player::setStatusValueNoChecks(PlayerStatus s, int value) {
 }
 
 bool Player::hasRelicRuntime(RelicId r) const {
-    if ((int) r < 64) {
-        return relicBits0 & (1ULL << (int)r);
+    const int relicIdx = static_cast<int>(r);
+    if (relicIdx < 64) {
+        return relicBits0 & (1ULL << relicIdx);
+    } else if (relicIdx < 128) {
+        return relicBits1 & (1ULL << (relicIdx-64));
     } else {
-        return relicBits1 & (1ULL << ((int)r-64));
+        return relicBits2 & (1ULL << (relicIdx-128));
     }
 }
 

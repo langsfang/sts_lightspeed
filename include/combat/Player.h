@@ -60,6 +60,7 @@ namespace sts {
 
         std::uint64_t relicBits0 = 0;
         std::uint64_t relicBits1 = 0;
+        std::uint64_t relicBits2 = 0;
 
         // special relic info
         int8_t  happyFlowerCounter = 0;
@@ -398,27 +399,35 @@ namespace sts {
 
     template <RelicId r>
     void Player::setHasRelic(bool value) {
+        const int relicIdx = static_cast<int>(r);
         if (value) {
-            if ((int) r < 64) {
-                relicBits0 |= 1ULL << (int)r;
+            if (relicIdx < 64) {
+                relicBits0 |= 1ULL << relicIdx;
+            } else if (relicIdx < 128) {
+                relicBits1 |= 1ULL << (relicIdx-64);
             } else {
-                relicBits1 |= 1ULL << ((int)r-64);
+                relicBits2 |= 1ULL << (relicIdx-128);
             }
         } else {
-            if ((int) r < 64) {
-                relicBits0 &= ~(1ULL << (int)r);
+            if (relicIdx < 64) {
+                relicBits0 &= ~(1ULL << relicIdx);
+            } else if (relicIdx < 128) {
+                relicBits1 &= ~(1ULL << (relicIdx-64));
             } else {
-                relicBits1 &= ~(1ULL << ((int)r-64));
+                relicBits2 &= ~(1ULL << (relicIdx-128));
             }
         }
     }
 
     template <RelicId r>
     bool Player::hasRelic() const {
-        if ((int) r < 64) {
-            return relicBits0 & (1ULL << (int)r);
+        const int relicIdx = static_cast<int>(r);
+        if (relicIdx < 64) {
+            return relicBits0 & (1ULL << relicIdx);
+        } else if (relicIdx < 128) {
+            return relicBits1 & (1ULL << (relicIdx-64));
         } else {
-            return relicBits1 & (1ULL << ((int)r-64));
+            return relicBits2 & (1ULL << (relicIdx-128));
         }
     }
 
