@@ -871,16 +871,18 @@ namespace sts {
     void printRelics(std::ostream &os, const Player &p) {
         os << "\t" << "Relics: ";
 
-        // this is slow and stupid
-        int i = static_cast<int>(R::AKABEKO);
-        while (i <= static_cast<int>(R::WRIST_BLADE)) {
-            auto r = static_cast<RelicId>(i);
-
-            if (p.hasRelicRuntime(r)) {
-                os << getRelicName(r) << ", ";
+        bool firstRelic = true;
+        for (int i = static_cast<int>(R::AKABEKO); i < static_cast<int>(R::INVALID); ++i) {
+            const auto r = static_cast<RelicId>(i);
+            if (!p.hasRelicRuntime(r)) {
+                continue;
             }
 
-            ++i;
+            if (!firstRelic) {
+                os << ", ";
+            }
+            firstRelic = false;
+            os << getRelicName(r);
         }
         os << "\n";
     }
@@ -964,7 +966,6 @@ namespace sts {
 
 
 }
-
 
 
 
