@@ -16,7 +16,7 @@
 using namespace sts;
 
 void runSearch(search::BattleScumSearcher2 &searcher, int simulations) {
-    searcher.search(simulations*10, 10000*10);
+    searcher.search(simulations, 10000);
 }
 
 std::string selectedCardNameForTask(const BattleContext &bc, CardSelectTask task, int idx) {
@@ -166,7 +166,7 @@ int main(int argc, char *argv[]) {
     }
 
     int simulationsPerThread = 100000;
-    int threadCount = 12;
+    int threadCount = 8;
 
     if (argc >= 3) {
         simulationsPerThread = std::max(1, std::stoi(argv[2]));

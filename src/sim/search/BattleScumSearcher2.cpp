@@ -701,7 +701,6 @@ void search::BattleScumSearcher2::enumerateCardActions(search::BattleScumSearche
             node.edges.push_back({Action(ActionType::CARD, handIdx)});
         }
     }
-
 }
 
 void search::BattleScumSearcher2::enumeratePotionActions(search::BattleScumSearcher2::Node &node,

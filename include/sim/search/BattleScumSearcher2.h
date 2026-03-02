@@ -59,7 +59,7 @@ namespace sts::search {
         double minActionValue = std::numeric_limits<double>::max();
         int outcomePlayerHp = 0;
 
-        bool allowPotions = true;
+        bool allowPotions = false;
         SearchIntent intent = SearchIntent::SURVIVAL_FIRST;
 
         std::vector<Action> bestActionSequence;
