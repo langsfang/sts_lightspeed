@@ -146,6 +146,7 @@ namespace sts {
         void resetAllStatusEffects();
 
         void setMove(MonsterMoveId moveId);
+        void syncMoveBasedStatuses();
         [[nodiscard]] bool firstTurn() const; // only to be called in rollMove() before any moves are set
         [[nodiscard]] bool lastMove(MonsterMoveId moveId) const;
         [[nodiscard]] bool lastMoveBefore(MonsterMoveId moveId) const;

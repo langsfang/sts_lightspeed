@@ -8,7 +8,16 @@
 #include "combat/BattleContext.h"
 #include "game/GameContext.h"
 
+#include <array>
+#include <utility>
+
 using namespace sts;
+
+namespace {
+    static constexpr std::array<std::pair<MMID, MS>, 1> kMoveImpliedStatuses{{
+        {MMID::LAGAVULIN_SLEEP, MS::ASLEEP},
+    }};
+}
 
 void Monster::setRandomHp(Random &hpRng, bool higherHp) {
     auto hpRange = monsterHpRange[static_cast<int>(id)][higherHp ? 1 : 0];
@@ -766,9 +775,22 @@ void Monster::rollMove(BattleContext &bc) {
     setMove(move);
 }
 
+void Monster::syncMoveBasedStatuses() {
+    for (const auto &mapping : kMoveImpliedStatuses) {
+        setHasStatus(mapping.second, false);
+    }
+
+    for (const auto &mapping : kMoveImpliedStatuses) {
+        if (moveHistory[0] == mapping.first) {
+            setHasStatus(mapping.second, true);
+        }
+    }
+}
+
 void Monster::setMove(MMID moveId) {
     moveHistory[1] = moveHistory[0];
     moveHistory[0] = moveId;
+    syncMoveBasedStatuses();
 }
 
 namespace sts {
