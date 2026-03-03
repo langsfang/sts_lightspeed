@@ -261,6 +261,7 @@ void search::BattleScumSearcher2::search(int64_t simulations, long maxTimeMillis
 void search::BattleScumSearcher2::step() {
     searchStack = {&root};
     actionStack.clear();
+    edgeIdxStack.clear();
     BattleContext curState;
     curState = *rootState;
 
@@ -268,7 +269,7 @@ void search::BattleScumSearcher2::step() {
         auto &curNode = *searchStack.back();
 
         if (isTerminalState(curState)) {
-            updateFromPlayout(searchStack, actionStack, curState);
+            updateFromPlayout(searchStack, edgeIdxStack, actionStack, curState);
             return;
         }
 
@@ -282,7 +283,7 @@ void search::BattleScumSearcher2::step() {
             enumerateActionsForNode(curNode, curState, false);
             pruneDuplicateEdges(curNode, curState);
             if (curNode.edges.empty()) {
-                updateFromPlayout(searchStack, actionStack, curState);
+                updateFromPlayout(searchStack, edgeIdxStack, actionStack, curState);
                 return;
             }
             const auto selectIdx = selectFirstActionForLeafNode(curNode, curState);
@@ -294,10 +295,11 @@ void search::BattleScumSearcher2::step() {
                                       ? NodeType::CHANCE
                                       : NodeType::DECISION;
             actionStack.push_back(edgeTaken.action);
+            edgeIdxStack.push_back(selectIdx);
             searchStack.push_back(edgeTaken.node.get());
 
             playoutRandom(curState, actionStack);
-            updateFromPlayout(searchStack, actionStack, curState);
+            updateFromPlayout(searchStack, edgeIdxStack, actionStack, curState);
             return;
 
         } else {
@@ -310,6 +312,7 @@ void search::BattleScumSearcher2::step() {
                                       ? NodeType::CHANCE
                                       : NodeType::DECISION;
             actionStack.push_back(edgeTaken.action);
+            edgeIdxStack.push_back(selectIdx);
             searchStack.push_back(edgeTaken.node.get());
         }
     }
@@ -440,7 +443,10 @@ void search::BattleScumSearcher2::pruneDuplicateEdges(search::BattleScumSearcher
     }
 }
 
-void search::BattleScumSearcher2::updateFromPlayout(const std::vector<Node *> &stack, const std::vector<Action> &actionStack, const BattleContext &endState) {
+void search::BattleScumSearcher2::updateFromPlayout(const std::vector<Node *> &stack,
+                                                  const std::vector<int> &edgeIdxStack,
+                                                  const std::vector<Action> &actionStack,
+                                                  const BattleContext &endState) {
     const auto evaluation = evaluateEndState(*rootState, endState);
 
     if (evaluation > bestActionValue) {
@@ -454,13 +460,31 @@ void search::BattleScumSearcher2::updateFromPlayout(const std::vector<Node *> &s
     }
 
     double backedUpValue = evaluation;
-    for (auto it = stack.rbegin(); it != stack.rend(); ++it) {
-        auto &node = *(*it);
+    for (int depth = static_cast<int>(stack.size()) - 1; depth >= 0; --depth) {
+        auto &node = *stack[depth];
         if (node.nodeType == NodeType::CHANCE && backedUpValue > 0) {
             backedUpValue *= chanceNodeBackpropWeight;
         }
+
         ++node.simulationCount;
         node.evaluationSum += backedUpValue;
+
+        if (depth > 0) {
+            const auto edgeStackIdx = static_cast<std::size_t>(depth - 1);
+            if (edgeStackIdx >= edgeIdxStack.size()) {
+                continue;
+            }
+
+            auto &parent = *stack[depth - 1];
+            const auto edgeIdx = edgeIdxStack[edgeStackIdx];
+            if (edgeIdx < 0 || edgeIdx >= static_cast<int>(parent.edges.size())) {
+                continue;
+            }
+
+            auto &edge = parent.edges[edgeIdx];
+            ++edge.simulationCount;
+            edge.evaluationSum += backedUpValue;
+        }
     }
 }
 
@@ -485,16 +509,16 @@ double search::BattleScumSearcher2::evaluateEdge(const search::BattleScumSearche
 
     const auto &edge = parent.edges[edgeIdx];
 
-    // unexplored nodes must be assigned a sufficiently large value
-    // that they are explored at a priority over any other node
-    if (edge.node->simulationCount == 0) {
+    // unexplored edges must be assigned a sufficiently large value
+    // that they are explored at a priority over any other edge
+    if (edge.simulationCount == 0) {
         return unexploredNodeValueParameter;
     }
 
-    double qualityValue = edge.node->evaluationSum / (edge.node->simulationCount+1);
+    const double qualityValue = edge.evaluationSum / static_cast<double>(edge.simulationCount);
 
-    double explorationValue = explorationParameter *
-            std::sqrt(std::log(parent.simulationCount+1) / (edge.node->simulationCount+1));
+    const double explorationValue = explorationParameter *
+            std::sqrt(std::log(parent.simulationCount + 1.0) / static_cast<double>(edge.simulationCount));
 
     return qualityValue + explorationValue;
 }

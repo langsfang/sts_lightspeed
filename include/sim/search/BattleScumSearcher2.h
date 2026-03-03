@@ -44,6 +44,8 @@ namespace sts::search {
         struct Edge {
             Action action;
             std::shared_ptr<Node> node = std::make_shared<Node>();
+            std::int64_t simulationCount = 0;
+            double evaluationSum = 0;
         };
 
         std::unique_ptr<const BattleContext> rootState;
@@ -66,6 +68,7 @@ namespace sts::search {
         std::default_random_engine randGen;
 
         std::vector<Node*> searchStack;
+        std::vector<int> edgeIdxStack;
         std::vector<Action> actionStack;
         std::unordered_map<std::uint64_t, std::shared_ptr<Node>> transpositionTable;
 
@@ -76,7 +79,10 @@ namespace sts::search {
         void step();
 
         // private helpers
-        void updateFromPlayout(const std::vector<Node*> &stack, const std::vector<Action> &actionStack, const BattleContext &endState);
+        void updateFromPlayout(const std::vector<Node*> &stack,
+                              const std::vector<int> &edgeIdxStack,
+                              const std::vector<Action> &actionStack,
+                              const BattleContext &endState);
         [[nodiscard]] bool isTerminalState(const BattleContext &bc) const;
         [[nodiscard]] bool transitionHasRandomEvent(const BattleContext &before, const BattleContext &after) const;
 
