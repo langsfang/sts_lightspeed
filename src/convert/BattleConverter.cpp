@@ -159,6 +159,8 @@ BattleContext BattleConverter::convertFromJson(const nlohmann::json &json, int *
                 bc.cards.stasisCards[std::min(1, monster->idx)] = cardInstance;
             }
         }
+
+        monster->syncMoveBasedStatuses();
     }
 
     // ensure the MonsterGroup position includes the preplacedIdx
