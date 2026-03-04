@@ -156,6 +156,26 @@ namespace {
         return score;
     }
 
+    int getProjectedIncomingHpLoss(const BattleContext &bc) {
+        int incomingDamage = 0;
+        for (int i = 0; i < bc.monsters.monsterCount; ++i) {
+            const auto &m = bc.monsters.arr[i];
+            if (m.isDeadOrEscaped() || m.isHalfDead()) {
+                continue;
+            }
+
+            auto dInfo = m.getMoveBaseDamage(bc);
+            if (dInfo.attackCount <= 0 || dInfo.damage <= 0) {
+                continue;
+            }
+
+            dInfo.damage = m.calculateDamageToPlayer(bc, dInfo.damage);
+            incomingDamage += dInfo.damage * dInfo.attackCount;
+        }
+
+        return std::max(0, incomingDamage - bc.player.block);
+    }
+
     double getNonMinionMonsterBlockTotal(const BattleContext &bc) {
         int blockTotal = 0;
 
@@ -210,6 +230,10 @@ namespace {
                                                          - getNonMinionMonsterBlockTotal(after));
         const double scalingDelta = getPlayerScalingDeltaScore(before, after);
         const double enemyDebuffDelta = getEnemyDebuffDeltaScore(before, after);
+        // hpDelta only measures immediate HP changes after this action (usually 0 before monster turn).
+        // Add a one-step lookahead of expected HP loss this turn so "kill attacking enemy first" is scored higher.
+        const double projectedHpLossDelta = static_cast<double>(getProjectedIncomingHpLoss(before)
+                                                              - getProjectedIncomingHpLoss(after));
 
         const auto weights = getHeuristicWeightsForIntent(intent);
 
@@ -219,7 +243,8 @@ namespace {
                + (enemyHpDelta * weights.enemyHp)
                + (enemyBlockDelta * weights.enemyBlock)
                + (scalingDelta * weights.scaling)
-               + (enemyDebuffDelta * weights.enemyDebuff);
+               + (enemyDebuffDelta * weights.enemyDebuff)
+               + (projectedHpLossDelta * weights.hp);
     }
 }
 
@@ -592,7 +617,7 @@ void search::BattleScumSearcher2::playoutRandom(BattleContext &state, std::vecto
                     bestScore = score;
                     bestIdxs.clear();
                     bestIdxs.push_back(i);
-                } else if (score == bestScore) {
+                } else if (std::abs(score-bestScore) < 0.01) {
                     bestIdxs.push_back(i);
                 }
             }
